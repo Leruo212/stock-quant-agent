@@ -282,6 +282,106 @@ def cmd_evaluate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_forecast(args: argparse.Namespace) -> int:
+    from .agent.tools import AgentContext
+    from .llm.client import MockClient
+    from .llm.forecast import forecast_or_fallback
+
+    s = _settings()
+    if args.provider:
+        s.llm.provider = args.provider
+    if args.samples:
+        s.llm.n_samples = args.samples
+
+    codes = [c.strip().zfill(6) for c in (args.codes or args.code).split(",") if c.strip()]
+    if not codes:
+        print("[forecast] 需要 --code 或 --codes", file=sys.stderr)
+        return 1
+
+    ctx = AgentContext(s)
+    client = MockClient(s.llm) if s.llm.provider == "mock" else None
+    if s.llm.n_samples > 1 and not s.llm.api_key and s.llm.provider != "mock":
+        print("[forecast] 未配置 QA_LLM_API_KEY，--samples 对启发式占位无意义", file=sys.stderr)
+
+    for code in codes:
+        try:
+            snapshot = ctx.snapshot(code, as_of=args.as_of)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[forecast] {code}: {exc}", file=sys.stderr)
+            continue
+
+        hint = None
+        if not args.no_model_hint:
+            try:
+                hint = ctx.predictor.predict_bars(ctx.bars(code), s.features)["predicted_return"]
+            except Exception:  # noqa: BLE001
+                hint = None
+
+        try:
+            result = forecast_or_fallback(
+                snapshot, args.horizon, s.llm,
+                client=client, n_samples=s.llm.n_samples,
+                reflect=args.reflect, model_hint=hint,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[forecast] {code}: {exc}", file=sys.stderr)
+            continue
+
+        if args.record:
+            entry_id, created = ctx.ledger().record(result, note=args.note)
+            result["ledger_id"] = entry_id
+            result["ledger_created"] = created
+
+        if args.json:
+            print(json.dumps({k: v for k, v in result.items() if k != "snapshot"}, indent=2, ensure_ascii=False))
+            continue
+
+        ens = result.get("ensemble", {})
+        print(f"\n{result.get('name', '')}({code})  截至 {result['as_of']}  "
+              f"[{result['provider']}/{result['model']}]")
+        print(f"  方向 {result['direction']}  置信 {result['confidence']:.2f}  "
+              f"预期 {result['expected_return_pct']:+.2f}%  ({result['horizon_days']} 日)")
+        if ens.get("n", 1) > 1:
+            print(f"  {ens['n']} 次采样：方向一致率 {ens['direction_agreement']:.0%}，幅度极差 {ens['return_range_pct']}pp")
+        for driver in result.get("drivers", []):
+            print(f"  · {driver}")
+        if result.get("risk"):
+            print(f"  风险：{result['risk']}")
+        if result.get("reflection", {}).get("changed_fields"):
+            print(f"  反思修正了：{', '.join(result['reflection']['changed_fields'])}")
+        if result.get("ledger_id"):
+            state = "已写入" if result.get("ledger_created") else "已存在"
+            print(f"  台账 {state}：{result['ledger_id']}")
+
+    return 0
+
+
+def cmd_ledger(args: argparse.Namespace) -> int:
+    from .agent.tools import AgentContext
+    from .llm.ledger import Ledger
+
+    s = _settings()
+    ledger = Ledger(s.paths.ledger / "predictions.jsonl")
+    entries = ledger.entries()
+
+    if args.score:
+        ctx = AgentContext(s)
+        report = ledger.score(lambda c: ctx.bars(c), min_entries=args.min_entries)
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        return 0
+
+    if not entries:
+        print("[ledger] 空台账。用 `forecast --record` 记录第一条预测。")
+        return 0
+    print(f"{'as_of':<12}{'code':<8}{'方向':<6}{'预期':>9}{'置信':>7}  {'模型':<18}{'provider':<10}")
+    for e in entries[-args.limit:]:
+        print(f"{e.get('as_of',''):<12}{e.get('code',''):<8}{e.get('direction',''):<6}"
+              f"{e.get('expected_return_pct',0):+7.2f}%{e.get('confidence',0):7.2f}  "
+              f"{str(e.get('model',''))[:16]:<18}{e.get('provider',''):<10}")
+    print(f"\n共 {len(entries)} 条。评分：python -m quantagent.cli ledger --score")
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -350,6 +450,26 @@ def build_parser() -> argparse.ArgumentParser:
     ev = sub.add_parser("evaluate", help="评估模型信号质量（IC、分层收益、线性基线）")
     ev.add_argument("--max-per-symbol", type=int, default=200)
     ev.set_defaults(func=cmd_evaluate)
+
+    fc = sub.add_parser("forecast", help="调用大模型做方向预测")
+    fc.add_argument("--code", default="600519")
+    fc.add_argument("--codes", default="", help="逗号分隔，批量预测")
+    fc.add_argument("--horizon", type=int, default=7)
+    fc.add_argument("--as-of", default=None, help="只用该日期及之前的数据（默认最新）")
+    fc.add_argument("--samples", type=int, default=0, help="自一致性采样次数，>1 可估计不确定性")
+    fc.add_argument("--reflect", action="store_true", help="增加一轮自我审查（多一次调用）")
+    fc.add_argument("--record", action="store_true", help="写入预测台账")
+    fc.add_argument("--provider", choices=["auto", "openai", "mock"], default=None)
+    fc.add_argument("--no-model-hint", action="store_true", help="不把统计模型结果作为参考给大模型")
+    fc.add_argument("--json", action="store_true")
+    fc.add_argument("--note", default="")
+    fc.set_defaults(func=cmd_forecast)
+
+    lg = sub.add_parser("ledger", help="查看 / 打分预测台账")
+    lg.add_argument("--score", action="store_true")
+    lg.add_argument("--limit", type=int, default=20)
+    lg.add_argument("--min-entries", type=int, default=5)
+    lg.set_defaults(func=cmd_ledger)
 
     pr = sub.add_parser("predict", help="模型推理")
     pr.add_argument("--code", default="600519")

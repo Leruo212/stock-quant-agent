@@ -24,3 +24,5 @@ reports/*.csv
 .idea/
 .vscode/
 *.swp
+data/ledger/*.jsonl
+!data/ledger/.gitkeep

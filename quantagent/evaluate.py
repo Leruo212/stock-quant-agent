@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 
-def _spearman(a: np.ndarray, b: np.ndarray) -> float:
+def spearman(a: np.ndarray, b: np.ndarray) -> float:
     if len(a) < 3:
         return float("nan")
     ra = pd.Series(a).rank().to_numpy()
@@ -55,7 +55,7 @@ def signal_report(pred: np.ndarray, target: np.ndarray, dates: np.ndarray, n_dec
 
     daily_ic = (
         frame.groupby("date")
-        .apply(lambda g: _spearman(g["pred"].to_numpy(), g["target"].to_numpy()), include_groups=False)
+        .apply(lambda g: spearman(g["pred"].to_numpy(), g["target"].to_numpy()), include_groups=False)
         .dropna()
     )
     ic_mean = float(daily_ic.mean()) if len(daily_ic) else float("nan")
@@ -92,7 +92,7 @@ def regime_split(pred: np.ndarray, target: np.ndarray, dates: np.ndarray, vol_wi
                           "date": pd.to_datetime(pd.Series(dates))}).dropna()
     daily = pd.DataFrame({
         "ic": frame.groupby("date")[["pred", "target"]].apply(
-            lambda g: _spearman(g["pred"].to_numpy(), g["target"].to_numpy())
+            lambda g: spearman(g["pred"].to_numpy(), g["target"].to_numpy())
         ),
         "vol": frame.groupby("date")["target"].std(),
     }).dropna(subset=["ic"])

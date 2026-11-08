@@ -60,10 +60,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/health")
     def health() -> dict:
         ckpt = (settings.paths.artifacts / "cnn_lstm_attn.pt").exists()
+        if settings.llm.api_key:
+            provider = "openai"
+        elif settings.llm.provider == "mock":
+            provider = "mock"
+        else:
+            provider = "heuristic"
         return {
             "ok": True,
             "model_ready": ckpt,
             "llm_mode": "llm" if settings.llm.enabled else "local",
+            "forecast_provider": provider,
+            "llm_model": settings.llm.model if settings.llm.api_key else "",
             "cache_dir": str(settings.paths.cache),
         }
 
@@ -169,6 +177,63 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not path.exists():
             raise HTTPException(status_code=503, detail="no signal report, run `evaluate` first")
         return JSONResponse(_clean(json.loads(path.read_text(encoding="utf-8"))))
+
+    # ------------------------------------------------------------ llm forecast
+    def agent_ctx():
+        from ..agent.tools import AgentContext
+
+        if state.get("ctx") is None:
+            state["ctx"] = AgentContext(settings)
+        return state["ctx"]
+
+    @app.get("/api/forecast")
+    def forecast_api(
+        code: str = "600519",
+        horizon: int = Query(7, ge=1, le=60),
+        samples: int = Query(0, ge=0, le=10),
+        reflect: bool = False,
+        record: bool = False,
+    ) -> JSONResponse:
+        from ..llm.client import MockClient
+        from ..llm.forecast import forecast_or_fallback
+
+        ctx = agent_ctx()
+        try:
+            snapshot = ctx.snapshot(code)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=404, detail=f"{code}: {exc}") from exc
+
+        hint = None
+        if (settings.paths.artifacts / "cnn_lstm_attn.pt").exists():
+            try:
+                hint = ctx.predictor.predict_bars(ctx.bars(code), settings.features)["predicted_return"]
+            except Exception:  # noqa: BLE001
+                hint = None
+
+        client = MockClient(settings.llm) if settings.llm.provider == "mock" else None
+        try:
+            result = forecast_or_fallback(
+                snapshot, horizon, settings.llm, client=client,
+                n_samples=samples or settings.llm.n_samples, reflect=reflect, model_hint=hint,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+        if record:
+            entry_id, created = ctx.ledger().record(result, note="via api")
+            result["ledger_id"] = entry_id
+            result["ledger_created"] = created
+        return JSONResponse(_clean(result))
+
+    @app.get("/api/ledger")
+    def ledger_api(score: bool = False, limit: int = Query(20, ge=1, le=200)) -> JSONResponse:
+        ctx = agent_ctx()
+        ledger = ctx.ledger()
+        if score:
+            report = ledger.score(lambda c: ctx.bars(c))
+            return JSONResponse(_clean(report))
+        entries = ledger.entries()
+        return JSONResponse(_clean({"n": len(entries), "entries": entries[-limit:][::-1]}))
 
     @app.get("/api/agent")
     def agent_stream(q: str = Query(..., min_length=1)) -> StreamingResponse:

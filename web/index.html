@@ -151,6 +151,7 @@
     </div>
     <span class="pill" id="pill-model">模型状态 …</span>
     <span class="pill" id="pill-llm">推理模式 …</span>
+    <span class="pill" id="pill-forecast">预测通道 …</span>
     <div class="grow"></div>
     <input type="text" id="code" value="600519" placeholder="股票代码" style="width:112px" />
     <button class="primary" id="load">加载</button>
@@ -185,6 +186,17 @@
 
     <h2 class="sec">当前输入特征 · 9 维</h2>
     <div class="feat"><table><tbody id="feat-a"></tbody></table><table><tbody id="feat-b"></tbody></table></div>
+
+    <h2 class="sec">大模型判断 · 独立于统计模型的第二条路径</h2>
+    <div class="row">
+      <button id="run-llm">让大模型判断</button>
+      <button id="rec-llm" disabled>写入台账</button>
+      <span class="hint" id="llm-hint">把截止当日的数值快照交给大模型，禁止它引用快照之外的信息</span>
+    </div>
+    <div class="kpis" id="kpi-llm" style="margin-top:12px">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">未运行</div></div>
+    </div>
+    <div id="llm-detail"></div>
   </section>
 
   <!-- ================= 回测 ================= -->
@@ -236,6 +248,16 @@
       IC（信息系数）是横截面上「预测排序」与「实际收益排序」的秩相关。日频 IC 均值 0.03 上下就是可用的弱信号；
       接近 0 且 IR 不显著，说明模型没有学到可交易的东西。
     </div>
+
+    <h2 class="sec">大模型预测台账</h2>
+    <div class="row">
+      <button id="refresh-ledger">刷新</button>
+      <span class="hint">台账只记真实时点的预测，等窗口到期后才打分——历史窗口回测对 LLM 没有意义</span>
+    </div>
+    <div class="kpis" id="kpi-ledger" style="margin-top:12px">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">未加载</div></div>
+    </div>
+    <table id="ledger-table" style="margin-top:12px"><tbody></tbody></table>
   </section>
 
   <!-- ================= 对话 ================= -->
@@ -458,6 +480,100 @@ async function loadSignal() {
   }
 }
 
+/* ---------- 大模型预测 ---------- */
+let lastForecast = null;
+
+async function runLLMForecast() {
+  const code = ($("code").value || "600519").trim();
+  $("llm-hint").textContent = "请求中…";
+  $("rec-llm").disabled = true;
+  try {
+    const r = await (await fetch(`/api/forecast?code=${code}`)).json();
+    if (r.detail) throw new Error(r.detail);
+    lastForecast = r;
+    const dirText = r.direction === "up" ? "偏多" : (r.direction === "down" ? "偏空" : "震荡");
+    const dirCls = r.direction === "up" ? "up" : (r.direction === "down" ? "down" : "flat");
+    $("kpi-llm").innerHTML =
+      kpi("方向", dirText, dirCls, `${r.horizon_days} 个交易日`) +
+      kpi("置信度", `${(r.confidence * 100).toFixed(0)}%`, "flat", `截至 ${r.as_of}`) +
+      kpi("预期涨跌", `${r.expected_return_pct > 0 ? "+" : ""}${r.expected_return_pct.toFixed(2)}%`, dirCls, "模型给的幅度") +
+      kpi("一致性", `${r.ensemble.n} 次 · ${(r.ensemble.direction_agreement * 100).toFixed(0)}%`,
+          "flat", r.ensemble.n > 1 ? `幅度极差 ${r.ensemble.return_range_pct}pp` : "单次采样") +
+      kpi("来源",
+          r.provider === "openai" ? (r.model || "LLM") : (r.provider === "mock" ? "mock" : "占位"),
+          r.provider === "openai" ? "flat" : "down",
+          r.provider === "openai" ? "真实 API" : "非大模型");
+    const drivers = (r.drivers || []).map(d => `<li>${d}</li>`).join("");
+    $("llm-detail").innerHTML =
+      `<table><tbody>${drivers ? `<tr><td style="color:var(--faint);width:80px">依据</td><td><ul style="margin:0;padding-left:18px">${drivers}</ul></td></tr>` : ""}
+       ${r.risk ? `<tr><td style="color:var(--faint)">风险</td><td>${r.risk}</td></tr>` : ""}
+       ${r.reflection && r.reflection.ok && r.reflection.changed_fields && r.reflection.changed_fields.length
+         ? `<tr><td style="color:var(--faint)">反思</td><td>修正了 ${r.reflection.changed_fields.join("、")}</td></tr>` : ""}
+       </tbody></table>`;
+    if (r.provider !== "openai") {
+      $("llm-hint").innerHTML = `<span style="color:var(--up)">当前来源是 ${
+        r.provider === "mock" ? "mock 客户端（确定性占位）" : "启发式占位"
+      }，不是大模型输出。</span> 配置 <code>QA_LLM_API_KEY</code> 后这里才是真实调用。`;
+    } else {
+      $("llm-hint").textContent = `已调用 ${r.model}，prompt ${r.prompt_version}`;
+      $("rec-llm").disabled = false;
+    }
+  } catch (e) {
+    $("kpi-llm").innerHTML = kpi("失败", e.message);
+    $("llm-hint").textContent = "调用失败，检查 base_url / model / 余额";
+  }
+}
+
+async function recordForecast() {
+  if (!lastForecast) return;
+  $("rec-llm").disabled = true;
+  $("llm-hint").textContent = "写入中…";
+  try {
+    const code = ($("code").value || "600519").trim();
+    const r = await (await fetch(`/api/forecast?code=${code}&record=true`)).json();
+    if (r.detail) throw new Error(r.detail);
+    $("llm-hint").textContent = r.ledger_created ? `已写入台账 ${r.ledger_id}` : `台账里已有该条 ${r.ledger_id}`;
+  } catch (e) {
+    $("llm-hint").textContent = "写入失败：" + e.message;
+  }
+}
+
+/* ---------- 台账 ---------- */
+async function loadLedger() {
+  try {
+    const [list, score] = await Promise.all([
+      fetch("/api/ledger").then(r => r.json()),
+      fetch("/api/ledger?score=true").then(r => r.json()),
+    ]);
+    if (list.detail) throw new Error(list.detail);
+    $("kpi-ledger").innerHTML =
+      kpi("已记录", String(list.n || 0), "flat", "条预测") +
+      kpi("已到期", String(score.n_scored || 0), "flat", `待到期 ${score.pending || 0}`) +
+      kpi("方向命中", score.n_scored ? pct(score.direction_accuracy, 1) : "—", "flat",
+          score.n_scored ? `基准 ${pct(score.baseline_up_rate, 1)}` : "") +
+      kpi("平均绝对误差", score.n_scored ? `${score.mae_pct} pp` : "—") +
+      kpi("相关系数", score.correlation === undefined || score.correlation === null ? "—" : f2(score.correlation)) +
+      kpi("样本是否充分", score.n_scored ? (score.insufficient_sample ? "否" : "是") : "—",
+          score.insufficient_sample ? "down" : "flat",
+          score.n_scored ? `${score.n_scored} 条 / ${score.n_dates} 个交易日` : "先积累") +
+      `<div class="note" style="grid-column:1/-1;margin-top:2px">${
+        score.verdict || "台账会记录每一条预测，等窗口到期后自动计分。"}</div>`;
+    const rows = (list.entries || []).map(e => {
+      const detail = (score.detail || []).find(d => d.code === e.code && d.as_of === e.as_of);
+      const realized = detail ? `${detail.realized_return_pct > 0 ? "+" : ""}${detail.realized_return_pct}%` : "待到期";
+      const hit = detail ? (detail.correct ? "✓" : "✗") : "";
+      return `<tr><td>${e.as_of}</td><td>${e.code}</td><td>${e.direction}</td>
+        <td class="r num">${e.expected_return_pct > 0 ? "+" : ""}${e.expected_return_pct}%</td>
+        <td class="r num ${detail ? sign(detail.realized_return_pct) : ""}">${realized}</td>
+        <td>${hit}</td><td class="hint">${e.provider || ""}</td></tr>`;
+    }).join("");
+    $("ledger-table").querySelector("tbody").innerHTML = rows ||
+      `<tr><td class="hint">台账为空。在「个股」页跑一次预测后点「写入台账」。</td></tr>`;
+  } catch (e) {
+    $("kpi-ledger").innerHTML = kpi("失败", e.message);
+  }
+}
+
 /* ---------- 对话 ---------- */
 function askAgent() {
   const q = $("question").value.trim();
@@ -492,7 +608,7 @@ function activate(tab, run = true) {
   ["stock", "backtest", "signal", "agent"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== tab));
   if (!run) return;
   if (tab === "backtest" && !$("kpi-bt").dataset.done) runBacktest();
-  if (tab === "signal" && !window.__signalLoaded) { window.__signalLoaded = true; loadSignal(); }
+  if (tab === "signal" && !window.__signalLoaded) { window.__signalLoaded = true; loadSignal(); loadLedger(); }
 }
 
 document.querySelectorAll("nav button").forEach(btn => {
@@ -504,6 +620,9 @@ document.querySelectorAll("nav button").forEach(btn => {
 $("load").onclick = loadStock;
 $("code").addEventListener("keydown", e => { if (e.key === "Enter") loadStock(); });
 $("run-bt").onclick = runBacktest;
+$("run-llm").onclick = runLLMForecast;
+$("rec-llm").onclick = recordForecast;
+$("refresh-ledger").onclick = loadLedger;
 $("ask").onclick = askAgent;
 $("question").addEventListener("keydown", e => { if (e.key === "Enter") askAgent(); });
 
@@ -520,11 +639,15 @@ document.querySelectorAll(".chip").forEach(c => {
 });
 
 fetch("/api/health").then(r => r.json()).then(h => {
-  const m = $("pill-model"), l = $("pill-llm");
+  const m = $("pill-model"), l = $("pill-llm"), f = $("pill-forecast");
   m.textContent = h.model_ready ? "模型已加载" : "模型未训练";
   m.className = "pill " + (h.model_ready ? "ok" : "warn");
   l.textContent = h.llm_mode === "llm" ? "LLM 工具调用" : "本地规则规划";
-  l.className = "pill";
+  f.textContent = h.forecast_provider === "openai" ? `预测 · ${h.llm_model}` :
+    (h.forecast_provider === "mock" ? "预测 · mock" : "预测 · 未配置 key");
+  f.className = "pill " + (h.forecast_provider === "openai" ? "ok" : "warn");
+  // 免费通道（mock / 启发式）自动跑一次，让页面一打开就有内容；真实 API 需手动触发以免计费
+  if (h.forecast_provider !== "openai") setTimeout(runLLMForecast, 900);
 }).catch(() => { $("pill-model").textContent = "服务未响应"; });
 
 loadStock();

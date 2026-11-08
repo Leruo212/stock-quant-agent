@@ -33,6 +33,22 @@ python -m quantagent.cli evaluate   # 信号质量检验（IC、分层、线性�
 python -m quantagent.cli serve      # 打开 http://127.0.0.1:8000
 ```
 
+接大模型做预测（这是当前主线）：
+
+```bash
+export QA_LLM_API_KEY=sk-...          # DeepSeek / 通义 / 月之暗面 / Ollama 任一兼容接口
+python -m quantagent.cli forecast --code 600519 --samples 5 --reflect --record
+python -m quantagent.cli ledger       # 看台账
+python -m quantagent.cli ledger --score   # 等窗口到期后打分
+```
+
+没有 key 也能把链路跑通，但会明确标注来源：
+
+```bash
+QA_LLM_PROVIDER=mock python -m quantagent.cli forecast --code 600519 --samples 3
+# → [mock/mock]，页面与 CLI 都会标红提示「这不是大模型结论」
+```
+
 一条命令跑完全流程：
 
 ```bash
@@ -88,6 +104,43 @@ IC 是 -0.0026，方向准确率 50.00%。**两条路都指向同一件事：这
 
 ---
 
+## 大模型预测
+
+统计模型这条路走到 IC≈0 就到头了。现在的重心是**调用大模型 API 做方向判断**，
+但做法和"让 GPT 说一只股票会涨会跌"不是一回事。
+
+### 三个设计决定
+
+**1. 喂数字，不喂故事。** 提示词里没有"茅台"这个可发挥的语义实体，只有 18 个数字：
+5/20/60 日动量、均线偏离、RSI、ATR、量比、60 日区间位置、相对沪深300 强弱。
+要求每一条 `drivers` 都必须引用快照里的字段名与数值——这样依据是可以核对真假的。
+
+**2. 自一致性代替"自我评估置信度"。** `--samples 5` 用同一提示词采样 5 次。
+方向一致率 100%、幅度极差 0.2pp，和方向一致率 60%、极差 5pp，是两种完全不同的判断，
+而模型自己报的 confidence 分不出这两者。
+
+**3. 不用 LLM 回测。** 它早就读过 2023 年的走势，在历史窗口上评估等于测记忆。
+唯一诚实的办法是**预测台账**：记录每次真实时点的判断，等 7 个交易日真的过去再打分。
+
+```
+forecast --record  →  data/ledger/predictions.jsonl（append-only，按 code+as_of+prompt_version 去重）
+       ↓ 等窗口到期
+ledger --score     →  命中率 / MAE / 相关系数 / 分 provider 对比
+```
+
+### 所以现在没有"LLM 准确率"这个数字
+
+仓库里没有 API key，`forecast` 会退化为 `mock` 或启发式占位，**两者都会在 CLI 和页面里
+标红注明"不是大模型结论"**。等真实 API 跑够 50 条到期样本，`ledger --score` 会给出第一份
+可信统计，到那时才写进 README。
+
+先给数字再补方法论，和先建机制再等数字，区别在于前者经不起追问。
+
+完整推导、成本估算、以及"为什么提示词优化的上限很低"见
+[docs/LLM_PREDICTION.md](docs/LLM_PREDICTION.md)。
+
+---
+
 ## 与论文的逐项对照
 
 | 论文原述 | 本仓库 | 状态 |
@@ -117,6 +170,11 @@ quantagent/
 │   ├── features.py   9 维特征 + 前瞻标签
 │   └── dataset.py    滑窗、按日期切分、z-score（统计量只来自训练段）
 ├── models/         CNN → PReLU → LSTM×2 → 注意力 → 全连接，35k 参数
+├── llm/            大模型预测：快照构造、提示词、JSON 校验、自一致性、反思、台账
+│   ├── context.py    18 个字段的因果快照（严格按 as_of 切片）
+│   ├── forecast.py   提示词 + 解析 + 采样聚合 + 反射
+│   ├── ledger.py     append-only 台账 + 到期打分
+│   └── client.py     OpenAI 兼容客户端 + 确定性 mock
 ├── backtest/       事件驱动回测、绩效指标、Optuna 十参数搜索
 ├── evaluate.py     IC / 分层收益 / 波动率分组 / 退化检测
 ├── baseline.py     Ridge 线性基线（回答"是不是网络不行"）
@@ -137,7 +195,8 @@ quantagent/
 
 `quantagent agent "600519 未来一周的模型信号？"`
 
-8 个工具：搜索标的、查行情、模型预测、全市场打分、动量扫描、风险画像、策略回测、特征快照。
+10 个工具：搜索标的、查行情、统计模型预测、**大模型预测**、**台账打分**、全市场打分、
+动量扫描、风险画像、策略回测、特征快照。
 
 两种模式：
 
@@ -176,6 +235,8 @@ python scripts/privacy_check.py   # 提交前跑一遍
 - **没有做多期滚动验证。** 只切了一刀（80/20）。正确做法是 walk-forward，每次重新拟合。
 - **不含涨跌停与停牌撮合限制**，实盘里 7 日调仓打到涨停板是买不进的。
 - **没有新闻/舆情模态。** 原论文的多模态是核心卖点，这里只复现了数值分支。
+- **大模型台账样本为 0。** 仓库没配 API key，`ledger --score` 目前只会回你 "n_scored: 0"。
+  这是设计如此，不是还没做完——先有机制，等真实调用积累。
 
 这些不是"以后再说"，是写在这里让人先知道边界在哪。
 

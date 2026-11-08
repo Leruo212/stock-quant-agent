@@ -20,9 +20,10 @@ class Paths:
     cache: Path = field(default_factory=lambda: _env_path("QA_CACHE_DIR", PROJECT_ROOT / "data" / "cache"))
     artifacts: Path = field(default_factory=lambda: _env_path("QA_ARTIFACT_DIR", PROJECT_ROOT / "artifacts"))
     reports: Path = field(default_factory=lambda: _env_path("QA_REPORT_DIR", PROJECT_ROOT / "reports"))
+    ledger: Path = field(default_factory=lambda: _env_path("QA_LEDGER_DIR", PROJECT_ROOT / "data" / "ledger"))
 
     def ensure(self) -> "Paths":
-        for p in (self.cache, self.artifacts, self.reports):
+        for p in (self.cache, self.artifacts, self.reports, self.ledger):
             p.mkdir(parents=True, exist_ok=True)
         return self
 
@@ -96,10 +97,14 @@ class LLMConfig:
     temperature: float = 0.2
     max_steps: int = 6
     timeout: float = 60.0
+    # forecasting: >1 samples gives a free uncertainty estimate via disagreement
+    n_samples: int = field(default_factory=lambda: int(os.getenv("QA_LLM_SAMPLES", "1")))
+    provider: str = field(default_factory=lambda: os.getenv("QA_LLM_PROVIDER", "auto"))  # auto | openai | mock
+    json_mode: bool = True
 
     @property
     def enabled(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) or self.provider == "mock"
 
 
 @dataclass

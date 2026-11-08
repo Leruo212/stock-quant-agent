@@ -77,6 +77,24 @@ class AgentContext:
             self._predictor = Predictor(self.settings.paths.artifacts)
         return self._predictor
 
+    # ------------------------------------------------------------------- llm
+    def snapshot(self, code: str, as_of: str | None = None) -> dict:
+        from ..llm.context import market_snapshot
+
+        bars = self.bars(code)
+        name = str(bars.iloc[-1].get("name", "") or self.names().get(normalize_code(code), ""))
+        bench = None
+        try:
+            bench = self.market.index_bars("000300").set_index("date")["close"]
+        except Exception:  # noqa: BLE001 - benchmark is optional context
+            bench = None
+        return market_snapshot(bars, code=normalize_code(code), name=name, as_of=as_of, benchmark=bench)
+
+    def ledger(self):
+        from ..llm.ledger import Ledger
+
+        return Ledger(self.settings.paths.ledger / "predictions.jsonl")
+
 
 def normalize_code(code: str) -> str:
     digits = "".join(ch for ch in str(code) if ch.isdigit())
@@ -226,6 +244,47 @@ def _build_tools(ctx: AgentContext) -> list[Tool]:
             return {"ok": False, "error": str(exc)}
         return {"ok": True, "stats": stats, "params": cfg.__dict__, "n_symbols": len(bars)}
 
+    def llm_forecast(code: str, horizon: int = 7, record: bool = False) -> dict:
+        """LLM 方向预测。与统计模型（predict_return）是两条独立路径。"""
+        from ..llm.client import MockClient
+        from ..llm.forecast import forecast_or_fallback
+
+        try:
+            snapshot = ctx.snapshot(code)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+
+        hint = None
+        try:
+            hint = ctx.predictor.predict_bars(ctx.bars(code), ctx.settings.features)["predicted_return"]
+        except Exception:  # noqa: BLE001 - model hint is optional
+            hint = None
+
+        cfg = ctx.settings.llm
+        client = MockClient(cfg) if cfg.provider == "mock" else None
+        try:
+            result = forecast_or_fallback(snapshot, int(horizon), cfg, client=client, model_hint=hint)
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+        payload = {k: v for k, v in result.items() if k != "snapshot"}
+        payload["ok"] = True
+        if record:
+            entry_id, created = ctx.ledger().record(result, note="via agent tool")
+            payload["ledger_id"] = entry_id
+            payload["ledger_created"] = created
+        return payload
+
+    def llm_signal_quality() -> dict:
+        """台账打分：只有已到期的预测才会被计入。"""
+        try:
+            ledger = ctx.ledger()
+            report = ledger.score(lambda c: ctx.bars(c))
+        except Exception as exc:  # noqa: BLE001
+            return {"ok": False, "error": str(exc)}
+        report["ok"] = True
+        return report
+
     def feature_snapshot(code: str) -> dict:
         try:
             bars = ctx.bars(code)
@@ -338,6 +397,27 @@ def _build_tools(ctx: AgentContext) -> list[Tool]:
                 "required": ["code"],
             },
             feature_snapshot,
+        ),
+        Tool(
+            "llm_forecast",
+            "把该股截止当日的数据快照交给大模型，让它判断未来 N 个交易日的方向与幅度，"
+            "返回方向、置信度、预期涨跌幅、依据与风险。与 predict_return（本地统计模型）是两条独立路径。",
+            {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "6 位股票代码"},
+                    "horizon": {"type": "integer", "description": "预测天数，默认 7", "default": 7},
+                    "record": {"type": "boolean", "description": "是否写入预测台账（供日后打分）", "default": False},
+                },
+                "required": ["code"],
+            },
+            llm_forecast,
+        ),
+        Tool(
+            "llm_signal_quality",
+            "统计预测台账里已到期预测的命中率与误差。样本不足 5 条时结论不可用。",
+            {"type": "object", "properties": {}},
+            llm_signal_quality,
         ),
     ]
 

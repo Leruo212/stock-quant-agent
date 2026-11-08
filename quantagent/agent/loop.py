@@ -46,14 +46,15 @@ def run_llm_agent(
     for step in range(settings.llm.max_steps):
         _emit(on_event, {"type": "thinking", "step": step + 1})
         try:
-            message = client.chat(messages, tools=registry.schemas())
+            response = client.chat(messages, tools=registry.schemas())
         except LLMError as exc:
             _emit(on_event, {"type": "error", "message": str(exc)})
             return {"ok": False, "error": str(exc), "trace": trace}
 
+        message = response.raw or {}
         tool_calls = message.get("tool_calls") or []
         if not tool_calls:
-            answer = (message.get("content") or "").strip()
+            answer = (message.get("content") or response.content or "").strip()
             _emit(on_event, {"type": "final", "content": answer})
             return {"ok": True, "answer": answer, "trace": trace, "mode": "llm"}
 
