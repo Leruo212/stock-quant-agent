@@ -43,7 +43,7 @@ class DataConfig:
 
 @dataclass
 class FeatureConfig:
-    window: int = 7               # observation window W, as in the thesis
+    window: int = 7               # observation window W
     horizon: int = 7              # predict close H trading days ahead
     feature_set: str = "stationary9"  # "stationary9" (default) | "raw9"
     label_mode: str = "raw"       # "raw" (relative return) | "rank" (cross-sectional percentile)
@@ -66,12 +66,12 @@ class TrainConfig:
 @dataclass
 class BacktestConfig:
     rebalance_days: int = 7
-    signal: str = "momentum"      # "momentum" (thesis) | "reversal" (buy the losers)
+    signal: str = "momentum"      # "momentum" | "reversal" (buy the losers)
     top_k: int = 0                # 0 -> hold every name that passes the filters
     position_size: float = 0.2    # cap on any single name's weight
     stop_loss: float = 0.08
     take_profit: float = 0.15
-    # the remaining knobs are the ten-parameter surface from thesis table 3-3
+    # the remaining knobs form the ten-parameter signal surface
     ma_short: int = 10
     ma_long: int = 60
     rsi_period: int = 14

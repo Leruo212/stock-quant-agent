@@ -186,10 +186,14 @@ def main() -> int:
                         "model": r.get("model", ""), "usage": r.get("usage", {}),
                     })
                 print(f"[static] llm examples: {len(examples)}，tokens {examples[0]['usage']}")
-    _dump(OUT / "data" / "llm_examples.json", {
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-        "items": examples,
-    })
+    examples_path = OUT / "data" / "llm_examples.json"
+    if examples or not examples_path.exists():
+        _dump(examples_path, {
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "items": examples,
+        })
+    else:
+        print("[static] 保留已有的 llm_examples.json（本次未传 --with-llm）")
 
     # ------------------------------------------------------------------- meta
     meta = {

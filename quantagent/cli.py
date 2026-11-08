@@ -462,7 +462,7 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--max-per-symbol", type=int, default=200, help="每只股票最多取多少窗口")
     t.add_argument("--feature-set", choices=["stationary9", "raw9"], default=None)
     t.add_argument("--label-mode", choices=["raw", "rank"], default=None,
-                   help="raw=预测相对收益（论文口径）, rank=预测横截面排序")
+                   help="raw=预测相对收益, rank=预测横截面排序")
     t.set_defaults(func=cmd_train)
 
     b = sub.add_parser("backtest", help="运行动量策略回测")
@@ -471,9 +471,9 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--top-k", type=int, default=0)
     b.add_argument("--rebalance-days", type=int, default=7)
     b.add_argument("--signal", choices=["momentum", "reversal"], default="momentum",
-                   help="momentum=买涨得多的（论文口径）, reversal=买跌得多的")
+                   help="momentum=买涨得多的, reversal=买跌得多的")
     b.add_argument("--limit", type=int, default=0)
-    b.add_argument("--no-cost", action="store_true", help="关闭手续费与滑点（复现论文口径）")
+    b.add_argument("--no-cost", action="store_true", help="关闭手续费与滑点，用于看毛收益")
     b.add_argument("--lag", type=int, default=0)
     b.set_defaults(func=cmd_backtest)
 

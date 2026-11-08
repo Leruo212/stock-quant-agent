@@ -1,6 +1,6 @@
 """Event-driven momentum backtester.
 
-The rule from the thesis, section 3.3.4: every ``rebalance_days`` trading days, rank
+The rule: every ``rebalance_days`` trading days, rank
 the universe by the return over the *previous* window and hold the names with positive
 momentum, equal weight, long only. Positions are cleared at the next rebalance when
 momentum has turned negative.
@@ -17,7 +17,7 @@ Four things the original implementation left out and this one does not:
 * a benchmark curve on the same calendar, otherwise "12% annual" means nothing.
 
 Signal timing: the signal computed on the close of ``t`` is executed at the close of
-``t`` (no lag), matching the thesis. ``lag=1`` shifts execution one day forward.
+``t`` (no lag). ``lag=1`` shifts execution one day forward for a conservative variant.
 """
 
 from __future__ import annotations

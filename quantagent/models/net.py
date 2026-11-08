@@ -1,4 +1,4 @@
-"""CNN-LSTM-Attention network, rebuilt to match the layer table in the thesis.
+"""CNN-LSTM-Attention network, built to match a published layer table.
 
 Reference table (input ``(N, 1, 7, 9)``)::
 
@@ -19,7 +19,7 @@ Two notes on purpose, because the table is internally inconsistent:
    LSTM receives, so it is implemented as-is rather than silently dropped.
 2. The LSTM parameter counts in the table are ~1% above the textbook
    ``4 * h * (in + h + 1)`` figure. This implementation follows PyTorch and reports the
-   real count at build time instead of copying the paper.
+   real count at build time instead of trusting the table.
 """
 
 from __future__ import annotations

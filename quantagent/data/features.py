@@ -9,7 +9,7 @@ Two feature sets are provided:
 
 ``raw9``
     Open / high / low / close / volume plus MA5-MA30 and raw RSI6, i.e. the
-    composition implied by the feature table in the original thesis. Kept so the
+    composition of the original feature table. Kept so the
     ablation in ``docs/RESULTS.md`` can be reproduced.
 
 The label is always the ``horizon``-day forward relative return of the close:

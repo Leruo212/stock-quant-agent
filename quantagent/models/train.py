@@ -1,10 +1,10 @@
 """Training loop: MSE on forward relative return, Adam + cosine annealing.
 
-Deviations from the thesis, stated up front:
+Deviations from the original recipe, stated up front:
 
 * initial LR 1e-3 instead of 0.1. With MSE on returns of order 1e-2, an LR of 0.1
   diverges within a handful of steps on every seed we tried.
-* early stopping on validation loss (patience in ``TrainConfig``), because the thesis
+* early stopping on validation loss (patience in ``TrainConfig``), because the original
   fixes 100 epochs and reports only the training loss.
 """
 

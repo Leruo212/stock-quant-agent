@@ -1,4 +1,4 @@
-"""Optuna search over the ten strategy parameters listed in thesis table 3-3.
+"""Optuna search over the ten parameters that make up the signal surface.
 
 Objective is the Sharpe ratio on the in-sample window, with a hard penalty on
 drawdowns beyond 25% so the search cannot buy return with leverage-like tail risk.

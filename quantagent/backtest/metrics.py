@@ -1,5 +1,5 @@
-"""Performance statistics. Same definitions as the thesis (eq. 3.3 - 3.6), plus Calmar
-and exposure, which the thesis omits and which matter for judging a long-only book."""
+"""Performance statistics. Standard annualisation plus Calmar
+and exposure, which are easy to omit and which matter for judging a long-only book."""
 
 from __future__ import annotations
 

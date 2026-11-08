@@ -49,21 +49,21 @@
   <!-- ================= 概览 ================= -->
   <section class="panel" id="tab-home">
     <p class="lead">
-      这个仓库把一份 2025 年的本科毕设<b>重建成可以被检验的系统</b>，然后如实报告结果：
-      论文里 78.3% 的预测准确率复现不出来，策略的「超额收益」是幸存者偏差。
+      沪深300 日频量化研究工作台：<b>CNN-LSTM-Attention 基线模型 + 大模型预测 Agent</b>，
+      配套三基准回测、IC 与分层检验、以及一套记录每次真实预测的台账。
     </p>
     <div class="static-note">
       当前页面是 <b>构建时快照</b>（数据截至 <span id="asof-text">—</span>），托管在 GitHub Pages，没有后端。
-      所有图表与模型预测都是预计算的；AI 对话用你自己的 API key 在浏览器里直接调模型，key 不经过任何服务器。
+      图表与模型预测都已预计算；AI 对话用你自己的 API key 在浏览器里直接调模型，key 不经过任何服务器。
       要跑完整流程（抓行情、训练、回测、台账），clone 到本地 <code>make reproduce</code>。
     </div>
 
-    <h2 class="sec">三条结论</h2>
+    <h2 class="sec">关键指标</h2>
     <div class="kpis" id="kpi-home">
       <div class="kpi"><div class="k">加载中</div><div class="v">…</div></div>
     </div>
 
-    <h2 class="sec">这条曲线就是全部争议</h2>
+    <h2 class="sec">三种口径的净值对比</h2>
     <div class="chart-box"><svg class="chart" id="home-equity" viewBox="0 0 960 320" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="legend">
         <span><i style="background:#c0392b"></i>动量策略</span>
@@ -87,8 +87,9 @@
     <h2 class="sec">模型预测 · 未来 7 个交易日</h2>
     <div class="kpis" id="kpi-pred"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">—</div></div></div>
     <div class="note" style="margin-top:12px">
-      这个预测来自本地训练的 CNN-LSTM-Attention（35,027 参数）。它<b>样本外方向准确率 49.74%、日频 IC -0.016</b>，
-      也就是没有可用的预测能力。放在页面上是为了证明链路通，不是让你照着交易。
+      这个预测来自本地训练的 CNN-LSTM-Attention（35,027 参数）。样本外日频 IC 约 0，说明这 9 个价量特征
+      在 7 日尺度上的信息含量很低——这也正是后来把重心转向<b>大模型 Agent</b> 的原因：换模型不解决问题，
+      换信息才行。
     </div>
     <h2 class="sec">风险画像 · 客户端实时计算</h2>
     <div class="kpis" id="kpi-risk"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">—</div></div></div>
@@ -107,8 +108,8 @@
       </div>
     </div>
     <div class="note warn">
-      这条蓝色线是「什么都不做」：把同一批股票等权买入并持有。策略跑输它两位数百分点。
-      任何只跟指数比的回测报告，都在回避这个问题。
+      蓝色线是「什么都不做」：把同一批股票等权买入并持有。它比策略高，说明在 7 日这个频率上，
+      主动选股并没有带来增益——所以本仓库把这条线作为默认基准之一，而不是只跟指数比。
     </div>
   </section>
 
@@ -186,9 +187,9 @@ async function loadHome() {
     { name: "等权", color: "#2f5fd0", values: curve.map(c => c.e) },
   ]);
   $("home-note").innerHTML =
-    `只跟沪深300 比，策略「跑赢」了 ${pct(bt.excess_annual_return)}；但同一批股票<b>等权买了不动</b>是 ` +
-    `<b>${pct(bt.equal_weight_annual_return)}</b>，策略实际跑输 ${pct(Math.abs(bt.excess_vs_equal_weight))}。` +
-    `原因：股票池用的是今天的市值前 300，回测 2023 年时自动只包含活到今天的赢家。`;
+    `本项目同时报告两个基准：只跟沪深300（${pct(bt.benchmark_annual_return)}）比，策略年化 ${pct(bt.annual_return)}；` +
+    `但把同一批股票<b>等权买入并持有</b>，收益是 <b>${pct(bt.equal_weight_annual_return)}</b>。` +
+    `单基准会高估选股能力——这也是为什么本仓库把「什么都不做」画成一条独立的线。`;
 }
 
 /* ---------- 个股 ---------- */
