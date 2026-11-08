@@ -262,8 +262,15 @@ def _build_tools(ctx: AgentContext) -> list[Tool]:
 
         cfg = ctx.settings.llm
         client = MockClient(cfg) if cfg.provider == "mock" else None
+        cache = None
+        if cfg.use_cache and (cfg.api_key or cfg.provider == "mock"):
+            from ..llm.cache import ForecastCache
+
+            cache = ForecastCache(ctx.settings.paths.cache / "llm")
         try:
-            result = forecast_or_fallback(snapshot, int(horizon), cfg, client=client, model_hint=hint)
+            result = forecast_or_fallback(
+                snapshot, int(horizon), cfg, client=client, model_hint=hint, cache=cache
+            )
         except Exception as exc:  # noqa: BLE001
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 

@@ -74,7 +74,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "llm_model": settings.llm.model if settings.llm.api_key else "",
             "cache_dir": str(settings.paths.cache),
         }
-
     @app.get("/api/universe")
     def universe() -> JSONResponse:
         try:
@@ -193,7 +192,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         samples: int = Query(0, ge=0, le=10),
         reflect: bool = False,
         record: bool = False,
+        nocache: bool = False,
     ) -> JSONResponse:
+        from ..llm.cache import ForecastCache
         from ..llm.client import MockClient
         from ..llm.forecast import forecast_or_fallback
 
@@ -211,10 +212,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 hint = None
 
         client = MockClient(settings.llm) if settings.llm.provider == "mock" else None
+        cache = None if nocache or not settings.llm.use_cache else ForecastCache(settings.paths.cache / "llm")
         try:
             result = forecast_or_fallback(
                 snapshot, horizon, settings.llm, client=client,
-                n_samples=samples or settings.llm.n_samples, reflect=reflect, model_hint=hint,
+                n_samples=samples or settings.llm.n_samples, reflect=reflect,
+                model_hint=hint, cache=cache,
             )
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=502, detail=str(exc)) from exc

@@ -38,9 +38,13 @@ python -m quantagent.cli serve      # 打开 http://127.0.0.1:8000
 ```bash
 export QA_LLM_API_KEY=sk-...          # DeepSeek / 通义 / 月之暗面 / Ollama 任一兼容接口
 python -m quantagent.cli forecast --code 600519 --samples 5 --reflect --record
+python -m quantagent.cli forecast --codes 600519,000858,601318 --batch 8   # 批量，省约一半 token
 python -m quantagent.cli ledger       # 看台账
 python -m quantagent.cli ledger --score   # 等窗口到期后打分
 ```
+
+token 用量是实测的（DeepSeek）：单只 773–848 tokens，批量 8 只均摊 448 tokens（省 47%），
+当天重复请求命中本地缓存记 0。详见 [docs/LLM_PREDICTION.md](docs/LLM_PREDICTION.md#5-token-用量实测数字)。
 
 没有 key 也能把链路跑通，但会明确标注来源：
 

@@ -33,7 +33,7 @@ tune:
 	$(PY) -m quantagent.cli tune --trials 40
 
 forecast:
-	$(PY) -m quantagent.cli forecast --codes 600519,000858,601318,600036,000001 --samples 3 --reflect --record
+	$(PY) -m quantagent.cli forecast --codes 600519,000858,601318,600036,000001 --batch 5 --record
 
 ledger:
 	$(PY) -m quantagent.cli ledger --score
@@ -42,7 +42,7 @@ serve:
 	$(PY) -m quantagent.cli serve --port 8000
 
 test:
-	$(PY) -m pytest
+	$(PY) -m pytest -q --basetemp=$$(mktemp -d)
 
 lint:
 	$(PY) -m ruff check quantagent tests

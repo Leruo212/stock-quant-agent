@@ -303,30 +303,64 @@ def cmd_forecast(args: argparse.Namespace) -> int:
     if s.llm.n_samples > 1 and not s.llm.api_key and s.llm.provider != "mock":
         print("[forecast] 未配置 QA_LLM_API_KEY，--samples 对启发式占位无意义", file=sys.stderr)
 
+    cache = None
+    if s.llm.use_cache and not args.no_cache and (s.llm.api_key or s.llm.provider == "mock"):
+        from .llm.cache import ForecastCache
+
+        cache = ForecastCache(s.paths.cache / "llm")
+
+    snapshots: list[dict] = []
+    hints: dict[str, float] = {}
     for code in codes:
         try:
-            snapshot = ctx.snapshot(code, as_of=args.as_of)
+            snapshots.append(ctx.snapshot(code, as_of=args.as_of))
         except Exception as exc:  # noqa: BLE001
             print(f"[forecast] {code}: {exc}", file=sys.stderr)
             continue
-
-        hint = None
         if not args.no_model_hint:
             try:
-                hint = ctx.predictor.predict_bars(ctx.bars(code), s.features)["predicted_return"]
+                hints[code] = ctx.predictor.predict_bars(ctx.bars(code), s.features)["predicted_return"]
             except Exception:  # noqa: BLE001
-                hint = None
+                pass
 
-        try:
-            result = forecast_or_fallback(
-                snapshot, args.horizon, s.llm,
-                client=client, n_samples=s.llm.n_samples,
-                reflect=args.reflect, model_hint=hint,
+    if not snapshots:
+        return 1
+
+    if args.batch > 1 and len(snapshots) > 1:
+        from .llm.forecast import forecast_batch
+
+        results = forecast_batch(
+            snapshots, args.horizon, s.llm, client=client,
+            batch_size=args.batch, cache=cache, model_hint_map=hints,
+        )
+        usage = (results[0].get("usage") if results else {}) or {}
+        if usage.get("prompt_tokens"):
+            total = usage.get("prompt_tokens", 0) + usage.get("completion_tokens", 0)
+            per_symbol = total / max(len(snapshots), 1)
+            single = 800  # measured one-symbol calls: 773-848 total tokens
+            print(
+                f"[forecast] 批量 {len(snapshots)} 只 / 每批 {args.batch} 只："
+                f"合计 {total} tokens，平均 {per_symbol:.0f}/只；"
+                f"单只调用实测 770–850/只，节省约 {max(0, (1 - per_symbol / single)) * 100:.0f}%",
+                file=sys.stderr,
             )
-        except Exception as exc:  # noqa: BLE001
-            print(f"[forecast] {code}: {exc}", file=sys.stderr)
-            continue
+        else:
+            print(f"[forecast] 批量模式：{len(snapshots)} 只 / 每批 {args.batch} 只", file=sys.stderr)
+    else:
+        results = []
+        for snapshot in snapshots:
+            try:
+                results.append(forecast_or_fallback(
+                    snapshot, args.horizon, s.llm,
+                    client=client, n_samples=s.llm.n_samples,
+                    reflect=args.reflect, model_hint=hints.get(str(snapshot.get("code", ""))),
+                    cache=cache,
+                ))
+            except Exception as exc:  # noqa: BLE001
+                print(f"[forecast] {snapshot.get('code')}: {exc}", file=sys.stderr)
 
+    for result in results:
+        code = result.get("code", "")
         if args.record:
             entry_id, created = ctx.ledger().record(result, note=args.note)
             result["ledger_id"] = entry_id
@@ -337,10 +371,11 @@ def cmd_forecast(args: argparse.Namespace) -> int:
             continue
 
         ens = result.get("ensemble", {})
-        print(f"\n{result.get('name', '')}({code})  截至 {result['as_of']}  "
-              f"[{result['provider']}/{result['model']}]")
-        print(f"  方向 {result['direction']}  置信 {result['confidence']:.2f}  "
-              f"预期 {result['expected_return_pct']:+.2f}%  ({result['horizon_days']} 日)")
+        print(f"\n{result.get('name', '')}({code})  截至 {result.get('as_of', '')}  "
+              f"[{result.get('provider')}/{result.get('model')}]"
+              + ("  · 缓存命中" if result.get("cached") else ""))
+        print(f"  方向 {result.get('direction')}  置信 {result.get('confidence', 0):.2f}  "
+              f"预期 {result.get('expected_return_pct', 0):+.2f}%  ({result.get('horizon_days')} 日)")
         if ens.get("n", 1) > 1:
             print(f"  {ens['n']} 次采样：方向一致率 {ens['direction_agreement']:.0%}，幅度极差 {ens['return_range_pct']}pp")
         for driver in result.get("drivers", []):
@@ -461,6 +496,8 @@ def build_parser() -> argparse.ArgumentParser:
     fc.add_argument("--record", action="store_true", help="写入预测台账")
     fc.add_argument("--provider", choices=["auto", "openai", "mock"], default=None)
     fc.add_argument("--no-model-hint", action="store_true", help="不把统计模型结果作为参考给大模型")
+    fc.add_argument("--no-cache", action="store_true", help="跳过结果缓存，强制真实调用")
+    fc.add_argument("--batch", type=int, default=1, help="每批几只股票（>1 时共用一个提示词，省 token）")
     fc.add_argument("--json", action="store_true")
     fc.add_argument("--note", default="")
     fc.set_defaults(func=cmd_forecast)

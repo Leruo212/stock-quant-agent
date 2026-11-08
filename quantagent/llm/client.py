@@ -171,9 +171,25 @@ class MockClient:
     def chat(self, messages: list[dict], json_mode: bool = False, **kwargs) -> ChatResponse:
         self.calls.append(messages)
         prompt = messages[-1]["content"]
-        ret5 = _find_number(prompt, "ret_5d_pct")
-        ret20 = _find_number(prompt, "ret_20d_pct")
-        rsi = _find_number(prompt, "rsi_14")
+
+        # batch prompts carry one "### 标的 N" block per symbol; answer them together so
+        # the offline path exercises the same code as a real batch call
+        blocks = prompt.split("### 标的 ")
+        if len(blocks) > 1:
+            items = []
+            for block in blocks[1:]:
+                item = self._answer(block)
+                item["code"] = _find_str(block, "code") or ""
+                items.append(item)
+            return ChatResponse(content=json.dumps({"items": items}, ensure_ascii=False), model="mock", latency=0.0)
+
+        return ChatResponse(content=json.dumps(self._answer(prompt), ensure_ascii=False), model="mock", latency=0.0)
+
+    @staticmethod
+    def _answer(block: str) -> dict:
+        ret5 = _find_number(block, "ret_5d_pct")
+        ret20 = _find_number(block, "ret_20d_pct")
+        rsi = _find_number(block, "rsi_14")
 
         score = (ret5 or 0) * 0.6 + (ret20 or 0) * 0.4
         if rsi is not None and rsi > 75:
@@ -182,16 +198,20 @@ class MockClient:
             score += 1.5
 
         direction = "up" if score > 0.5 else ("down" if score < -0.5 else "flat")
-        payload = {
+        return {
             "direction": direction,
             "confidence": round(min(0.62, 0.35 + abs(score) / 40), 2),
             "expected_return_pct": round(max(-8.0, min(8.0, score * 0.35)), 2),
             "drivers": [f"5 日动量 {ret5}%", f"20 日动量 {ret20}%"],
             "risk": "mock 客户端输出，仅用于链路验证",
         }
-        return ChatResponse(content=json.dumps(payload, ensure_ascii=False), model="mock", latency=0.0)
 
 
 def _find_number(text: str, key: str) -> float | None:
     match = re.search(rf"{key}:\s*(-?\d+(?:\.\d+)?)", text)
     return float(match.group(1)) if match else None
+
+
+def _find_str(text: str, key: str) -> str | None:
+    match = re.search(rf"{key}:\s*(\S+)", text)
+    return match.group(1) if match else None

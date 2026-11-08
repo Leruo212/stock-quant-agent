@@ -101,6 +101,8 @@ class LLMConfig:
     n_samples: int = field(default_factory=lambda: int(os.getenv("QA_LLM_SAMPLES", "1")))
     provider: str = field(default_factory=lambda: os.getenv("QA_LLM_PROVIDER", "auto"))  # auto | openai | mock
     json_mode: bool = True
+    max_output_tokens: int = 400      # a forecast JSON is ~200 tokens; cap the tail risk
+    use_cache: bool = field(default_factory=lambda: os.getenv("QA_LLM_NO_CACHE", "") == "")
 
     @property
     def enabled(self) -> bool:
