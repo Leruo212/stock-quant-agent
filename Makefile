@@ -13,6 +13,7 @@ help:
 	@echo "make forecast  调用大模型预测并写入台账（需 QA_LLM_API_KEY）"
 	@echo "make ledger    查看台账并打分"
 	@echo "make serve      启动 Web 工作台 http://127.0.0.1:8000"
+	@echo "make static     重新生成 GitHub Pages 静态站点（docs/）"
 	@echo "make test       运行测试"
 	@echo "make reproduce  fetch + train + backtest 一条龙"
 
@@ -49,6 +50,9 @@ lint:
 
 reproduce:
 	$(PY) -m quantagent.cli pipeline --limit 300 --epochs 60
+
+static:
+	$(PY) scripts/build_static.py --symbols 60 --with-llm 4
 
 clean:
 	rm -rf data/cache reports artifacts .pytest_cache

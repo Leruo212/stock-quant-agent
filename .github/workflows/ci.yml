@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖（CPU 版 torch，避免拉 CUDA）
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+
+      - name: 单元测试
+        run: python -m pytest -q
+
+      - name: 隐私扫描
+        # 仓库里没有 .privacy-terms.txt（已 gitignore），所以这里只跑正则层：
+        # 邮箱 / 手机号 / 身份证 / 家目录路径
+        run: python scripts/privacy_check.py
+
+      - name: 静态页面完整性
+        run: |
+          # 页面引用的资源必须存在，否则 GitHub Pages 会静默 404
+          for f in docs/index.html docs/assets/theme.css docs/assets/charts.js \
+                   docs/assets/agent.js docs/data/meta.json docs/data/predictions.json; do
+            test -f "$f" || { echo "缺少 $f"; exit 1; }
+          done

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QuantAgent · A 股量化研究工作台（静态演示）</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2316202c'/%3E%3Ctext x='16' y='21' font-family='sans-serif' font-size='13' font-weight='700' fill='%23fff' text-anchor='middle'%3EQA%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="assets/theme.css" />
+<style>
+  .keybar{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fcfcfd;margin-bottom:14px}
+  .keybar .row{margin-bottom:0}
+  .keybar input[type=password]{flex:1;min-width:200px}
+  .examples{margin-top:14px}
+  .ex{border:1px solid var(--line-soft);border-radius:11px;padding:12px 14px;margin-bottom:10px;background:#fff}
+  .ex h4{margin:0 0 6px;font-size:13px;font-weight:600}
+  .ex ul{margin:6px 0 0;padding-left:18px;color:var(--muted);font-size:12.5px}
+  .lead{font-size:14.5px;line-height:1.8;color:#2b3a55;margin:0 0 16px}
+  .lead b{color:var(--ink)}
+  .static-note{border-left:3px solid #d97706;background:#fffbeb;color:#6b4a12;border-radius:0 10px 10px 0;padding:10px 14px;font-size:12.5px;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-in">
+    <div class="mark">QA</div>
+    <div class="brand">
+      <h1>QuantAgent</h1>
+      <p>CNN-LSTM-Attention · 沪深300 · 日频</p>
+    </div>
+    <span class="pill ok" id="pill-asof">数据快照 …</span>
+    <span class="pill" id="pill-mode">静态演示</span>
+    <span class="pill" id="pill-key">未配置 key</span>
+    <div class="grow"></div>
+    <input type="text" id="code" placeholder="股票代码" style="width:112px" />
+    <button class="primary" id="load">查看</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav>
+    <button data-tab="home" class="active">概览</button>
+    <button data-tab="stock">个股</button>
+    <button data-tab="backtest">回测</button>
+    <button data-tab="signal">信号</button>
+    <button data-tab="agent">AI 对话</button>
+  </nav>
+
+  <!-- ================= 概览 ================= -->
+  <section class="panel" id="tab-home">
+    <p class="lead">
+      这个仓库把一份 2025 年的本科毕设<b>重建成可以被检验的系统</b>，然后如实报告结果：
+      论文里 78.3% 的预测准确率复现不出来，策略的「超额收益」是幸存者偏差。
+    </p>
+    <div class="static-note">
+      当前页面是 <b>构建时快照</b>（数据截至 <span id="asof-text">—</span>），托管在 GitHub Pages，没有后端。
+      所有图表与模型预测都是预计算的；AI 对话用你自己的 API key 在浏览器里直接调模型，key 不经过任何服务器。
+      要跑完整流程（抓行情、训练、回测、台账），clone 到本地 <code>make reproduce</code>。
+    </div>
+
+    <h2 class="sec">三条结论</h2>
+    <div class="kpis" id="kpi-home">
+      <div class="kpi"><div class="k">加载中</div><div class="v">…</div></div>
+    </div>
+
+    <h2 class="sec">这条曲线就是全部争议</h2>
+    <div class="chart-box"><svg class="chart" id="home-equity" viewBox="0 0 960 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><i style="background:#c0392b"></i>动量策略</span>
+        <span><i style="background:#98a2b3"></i>沪深300</span>
+        <span><i style="background:#2f5fd0"></i>等权持有同池</span>
+      </div>
+    </div>
+    <div class="note warn" id="home-note">
+      只跟沪深300 比，策略「跑赢」了；但同一批股票等权买了不动，收益远高于策略。
+      因为股票池用的是今天的市值前 300，回测 2023 年时自动只包含活到今天的赢家。
+    </div>
+  </section>
+
+  <!-- ================= 个股 ================= -->
+  <section class="panel hidden" id="tab-stock">
+    <h2 class="sec">行情</h2>
+    <div class="kpis" id="kpi-stock"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">加载中…</div></div></div>
+    <div class="chart-box"><svg class="chart" id="candle" viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend"><span><i style="background:#c0392b"></i>阳线</span><span><i style="background:#0e7c6b"></i>阴线</span></div>
+    </div>
+    <h2 class="sec">模型预测 · 未来 7 个交易日</h2>
+    <div class="kpis" id="kpi-pred"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">—</div></div></div>
+    <div class="note" style="margin-top:12px">
+      这个预测来自本地训练的 CNN-LSTM-Attention（35,027 参数）。它<b>样本外方向准确率 49.74%、日频 IC -0.016</b>，
+      也就是没有可用的预测能力。放在页面上是为了证明链路通，不是让你照着交易。
+    </div>
+    <h2 class="sec">风险画像 · 客户端实时计算</h2>
+    <div class="kpis" id="kpi-risk"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">—</div></div></div>
+  </section>
+
+  <!-- ================= 回测 ================= -->
+  <section class="panel hidden" id="tab-backtest">
+    <h2 class="sec">绩效 · 7 日调仓，含 8bps 手续费 + 2bps 滑点</h2>
+    <div class="kpis" id="kpi-bt"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">加载中…</div></div></div>
+    <h2 class="sec">净值曲线</h2>
+    <div class="chart-box"><svg class="chart" id="equity" viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend">
+        <span><i style="background:#c0392b"></i>动量策略</span>
+        <span><i style="background:#98a2b3"></i>沪深300</span>
+        <span><i style="background:#2f5fd0"></i>等权持有</span>
+      </div>
+    </div>
+    <div class="note warn">
+      这条蓝色线是「什么都不做」：把同一批股票等权买入并持有。策略跑输它两位数百分点。
+      任何只跟指数比的回测报告，都在回避这个问题。
+    </div>
+  </section>
+
+  <!-- ================= 信号 ================= -->
+  <section class="panel hidden" id="tab-signal">
+    <h2 class="sec">样本外信号检验</h2>
+    <div class="kpis" id="kpi-signal"><div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">加载中…</div></div></div>
+    <h2 class="sec">预测分层 · 各分位实现收益</h2>
+    <div class="chart-box"><svg class="chart" id="decile" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <div class="note">
+      IC 是横截面上「预测排序」与「实际收益排序」的秩相关。日频 IC 均值 0.03 上下才算可用的弱信号。
+      这里的数字接近 0 且 IR 不显著——和线性基线（Ridge）的结论一致，说明瓶颈在特征，不在模型。
+    </div>
+  </section>
+
+  <!-- ================= 对话 ================= -->
+  <section class="panel hidden" id="tab-agent">
+    <h2 class="sec">接入你自己的大模型</h2>
+    <div class="keybar">
+      <div class="row" style="margin-bottom:10px">
+        <input type="password" id="api-key" placeholder="粘贴你的 DeepSeek API key（sk-...）" />
+        <button class="primary" id="save-key">保存到本机</button>
+        <button id="clear-key">清除</button>
+      </div>
+      <div class="row">
+        <span class="hint">接口</span>
+        <input type="text" id="base-url" style="width:300px" />
+        <span class="hint">模型</span>
+        <input type="text" id="model" style="width:150px" />
+      </div>
+      <p class="hint" style="margin:10px 0 0">
+        key 只存在这个浏览器的 localStorage，只发给你填的接口，不经过任何服务器，也不会进仓库。
+        任何跑在本页的脚本理论上都能读到 localStorage——如果你介意，用 <code>python -m quantagent.cli serve</code> 在本地跑，key 就只在后端环境变量里。
+      </p>
+    </div>
+
+    <h2 class="sec">可以问什么</h2>
+    <div class="chips" id="samples"></div>
+    <div class="row">
+      <input type="text" id="question" placeholder="例如：600519 现在什么位置？风险大吗？" style="flex:1;min-width:220px" />
+      <button class="primary" id="ask">发送</button>
+    </div>
+    <h2 class="sec">工具调用轨迹</h2>
+    <div class="trace" id="trace">等待提问。</div>
+    <div class="answer pending" id="answer">回答会出现在这里。</div>
+
+    <h2 class="sec">示例输出 · 构建时用真实 API 生成的</h2>
+    <div class="examples" id="examples"><p class="hint">没有烘焙示例。</p></div>
+  </section>
+</div>
+
+<script src="assets/charts.js"></script>
+<script src="assets/agent.js"></script>
+<script>
+/* $ and the chart helpers come from assets/charts.js */
+
+/* ---------- 概览 ---------- */
+async function loadHome() {
+  const meta = await QA.loadJSON("data/meta.json");
+  const bt = meta.backtest;
+  $("pill-asof").textContent = `快照 ${meta.as_of}`;
+  $("asof-text").textContent = meta.as_of;
+  $("kpi-home").innerHTML =
+    kpi("模型参数量", (meta.model.params || 0).toLocaleString(), "flat", `样本外方向 ${(meta.model.val_direction_acc * 100).toFixed(2)}%`) +
+    kpi("策略年化", pct(bt.annual_return), sign(bt.annual_return), `${meta.backtest.n_days} 个交易日`) +
+    kpi("沪深300", pct(bt.benchmark_annual_return), sign(bt.benchmark_annual_return), "同期") +
+    kpi("等权持有", pct(bt.equal_weight_annual_return), sign(bt.equal_weight_annual_return), "什么都不做") +
+    kpi("超额 vs 等权", pct(bt.excess_vs_equal_weight), sign(bt.excess_vs_equal_weight), "策略 − 等权") +
+    kpi("成本拖累", pct(bt.cost_drag), "down", `年换手 ${f2(bt.turnover_per_year)}×`);
+
+  const curve = (await QA.loadJSON("data/backtest.json")).curve;
+  drawLines($("home-equity"), [
+    { name: "策略", color: "#c0392b", values: curve.map(c => c.s) },
+    { name: "沪深300", color: "#98a2b3", values: curve.map(c => c.b) },
+    { name: "等权", color: "#2f5fd0", values: curve.map(c => c.e) },
+  ]);
+  $("home-note").innerHTML =
+    `只跟沪深300 比，策略「跑赢」了 ${pct(bt.excess_annual_return)}；但同一批股票<b>等权买了不动</b>是 ` +
+    `<b>${pct(bt.equal_weight_annual_return)}</b>，策略实际跑输 ${pct(Math.abs(bt.excess_vs_equal_weight))}。` +
+    `原因：股票池用的是今天的市值前 300，回测 2023 年时自动只包含活到今天的赢家。`;
+}
+
+/* ---------- 个股 ---------- */
+async function loadStock() {
+  const code = ($("code").value || "600519").trim().padStart(6, "0");
+  $("kpi-stock").innerHTML = kpi("状态", "加载中…");
+  try {
+    await QA.prime();
+    const k = await QA.kline(code);
+    const bars = k.bars, last = bars[bars.length - 1], prev = bars[bars.length - 2];
+    const chg = last.close / prev.close - 1;
+    $("kpi-stock").innerHTML =
+      kpi("标的", `${code} ${k.name || ""}`, "flat", `${bars.length} 个交易日`) +
+      kpi("最新收盘", f2(last.close), sign(chg), last.date) +
+      kpi("日涨跌", pct(chg), sign(chg), "较前一交易日") +
+      kpi("近 20 日", pct(QA.returnsOf(bars, 20) / 100), sign(QA.returnsOf(bars, 20)), "累计涨跌");
+    drawCandles($("candle"), bars);
+
+    const p = QA.findPrediction(code);
+    if (p) {
+      $("kpi-pred").innerHTML =
+        kpi("预测收益", pct(p.pred), sign(p.pred), "未来 7 个交易日") +
+        kpi("方向", p.pred > 0 ? "偏多" : "偏空", sign(p.pred), "模型输出符号") +
+        kpi("预测窗口", QA.asOf(), "flat", `收盘 ${f2(p.close)}`) +
+        kpi("信号强度", Math.abs(p.pred) < 0.005 ? "接近 0" : "偏弱", "down", "IC≈0，不宜使用");
+    } else {
+      $("kpi-pred").innerHTML = kpi("模型", "该股未打包进静态快照", "down", "只有前 60 只有 K 线");
+    }
+
+    const rets = [];
+    for (let i = 1; i < bars.length; i++) rets.push(bars[i].close / bars[i - 1].close - 1);
+    const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+    const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length);
+    let peak = -Infinity, mdd = 0;
+    bars.forEach(b => { peak = Math.max(peak, b.close); mdd = Math.min(mdd, b.close / peak - 1); });
+    $("kpi-risk").innerHTML =
+      kpi("年化波动", pct(sd * Math.sqrt(252), 1), "flat", `${bars.length} 日`) +
+      kpi("最大回撤", pct(mdd, 1), "down", "区间内") +
+      kpi("RSI14", QA.rsiOf(bars, 14).toFixed(1), "flat", "客户端计算") +
+      kpi("区间位置", ((last.close - Math.min(...bars.map(b => b.low))) /
+        (Math.max(...bars.map(b => b.high)) - Math.min(...bars.map(b => b.low)) || 1)).toFixed(2), "flat", "0=最低 1=最高");
+  } catch (e) {
+    $("kpi-stock").innerHTML = kpi("错误", `${code} 无数据`);
+  }
+}
+
+/* ---------- 回测 ---------- */
+async function loadBacktest() {
+  const r = await QA.loadJSON("data/backtest.json");
+  const s = r.stats;
+  $("kpi-bt").innerHTML =
+    kpi("年化收益", pct(s.annual_return), sign(s.annual_return), `${s.n_days} 个交易日`) +
+    kpi("夏普", f2(s.sharpe), "flat", `波动 ${pct(s.annual_vol, 1)}`) +
+    kpi("最大回撤", pct(s.max_drawdown), "down", `Calmar ${f2(s.calmar)}`) +
+    kpi("等权持有", pct(s.equal_weight_annual_return), sign(s.equal_weight_annual_return), "同池买入不动") +
+    kpi("超额 vs 等权", pct(s.excess_vs_equal_weight), sign(s.excess_vs_equal_weight), "策略 − 等权") +
+    kpi("成本拖累", pct(s.cost_drag), "down", `年换手 ${f2(s.turnover_per_year)}×`);
+  drawLines($("equity"), [
+    { name: "策略", color: "#c0392b", values: r.curve.map(c => c.s) },
+    { name: "沪深300", color: "#98a2b3", values: r.curve.map(c => c.b) },
+    { name: "等权", color: "#2f5fd0", values: r.curve.map(c => c.e) },
+  ]);
+}
+
+/* ---------- 信号 ---------- */
+async function loadSignal() {
+  try {
+    const r = await QA.loadJSON("data/signal.json");
+    const base = r.ridge_baseline || {};
+    $("kpi-signal").innerHTML =
+      kpi("日频 IC 均值", r.mean_daily_ic == null ? "—" : Number(r.mean_daily_ic).toFixed(4),
+          r.mean_daily_ic > 0 ? "up" : "down", `IC std ${f2(r.ic_std)}`) +
+      kpi("方向准确率", pct(r.direction_accuracy, 1), "flat", `基准 ${pct(r.baseline_direction, 1)}`) +
+      kpi("预测标准差", Number(r.pred_std || 0).toExponential(2), "down", "塌缩成常数") +
+      kpi("分层价差", pct(r.decile_spread), sign(r.decile_spread), "最高 − 最低分位") +
+      kpi("线性基线 IC", base.mean_daily_ic == null ? "—" : Number(base.mean_daily_ic).toFixed(4), "flat", "Ridge，同特征") +
+      kpi("样本", (r.n_observations || 0).toLocaleString(), "flat", `${r.n_dates || 0} 个交易日`);
+    if (r.decile_mean_return) {
+      const keys = Object.keys(r.decile_mean_return).sort((a, b) => a - b);
+      drawBars($("decile"), keys.map(k => r.decile_mean_return[k]), keys.map(k => `D${k}`), { height: 260, pct: true });
+    }
+  } catch (e) {
+    $("kpi-signal").innerHTML = kpi("状态", "没有信号报告");
+  }
+}
+
+/* ---------- 对话 ---------- */
+function refreshKeyPill() {
+  const has = !!QA.getKey();
+  const pill = $("pill-key");
+  pill.textContent = has ? "已配置 key（仅本机）" : "未配置 key";
+  pill.className = "pill " + (has ? "ok" : "warn");
+}
+
+function initKey() {
+  const c = QA.cfg();
+  $("base-url").value = c.baseUrl;
+  $("model").value = c.model;
+  $("api-key").value = QA.getKey() ? "••••••••" : "";
+  refreshKeyPill();
+}
+["base-url", "model"].forEach(id => {
+  $(id).addEventListener("change", () => {
+    QA.saveCfg({ baseUrl: $("base-url").value.trim() || QA.DEFAULT_CFG.baseUrl, model: $("model").value.trim() || QA.DEFAULT_CFG.model });
+  });
+});
+$("save-key").onclick = () => {
+  const v = $("api-key").value.trim();
+  if (!v || v.startsWith("•")) { return; }
+  QA.setKey(v);
+  $("api-key").value = "••••••••";
+  QA.saveCfg({ baseUrl: $("base-url").value.trim() || QA.DEFAULT_CFG.baseUrl, model: $("model").value.trim() || QA.DEFAULT_CFG.model });
+  refreshKeyPill();
+};
+$("clear-key").onclick = () => { QA.clearKey(); $("api-key").value = ""; refreshKeyPill(); };
+
+async function askAgent() {
+  const q = $("question").value.trim();
+  if (!q) return;
+  if (!QA.getKey()) {
+    $("answer").classList.remove("pending");
+    $("answer").textContent = "先在上面填入你的 API key（只存本地），或直接看下面的示例输出。";
+    return;
+  }
+  const trace = $("trace"); trace.innerHTML = "";
+  const ans = $("answer"); ans.classList.add("pending"); ans.textContent = "思考中…";
+  const log = (t, cls = "") => {
+    const d = document.createElement("div"); if (cls) d.className = cls;
+    d.textContent = t; trace.appendChild(d); trace.scrollTop = trace.scrollHeight;
+  };
+  const result = await QA.ask(q, (evt) => {
+    if (evt.type === "tool_call") log(`→ ${evt.name}(${JSON.stringify(evt.arguments)})`, "t-call");
+    if (evt.type === "tool_result") log(`← ${evt.name} ${evt.result.ok ? "ok" : evt.result.error}`, evt.result.ok ? "" : "t-err");
+  });
+  ans.classList.remove("pending");
+  if (result.ok) {
+    ans.textContent = result.answer || "（空回答）";
+    const u = result.usage || {};
+    if (u.total_tokens) log(`tokens ${u.total_tokens} · ${result.model || ""}`);
+  } else {
+    ans.textContent = "失败：" + result.error;
+  }
+  ans.classList.add("fade");
+}
+
+async function loadExamples() {
+  try {
+    const r = await QA.loadJSON("data/llm_examples.json");
+    const items = r.items || [];
+    if (!items.length) {
+      $("examples").innerHTML = `<p class="hint">构建时没有配置 API key，所以没有烘焙示例。填上你自己的 key 就能实时生成。</p>`;
+      return;
+    }
+    $("examples").innerHTML =
+      `<p class="hint">生成于 ${r.generated_at}，模型 ${items[0].model || "—"}，共 ${items.length} 条。这些是真实调用结果，不是模板。</p>` +
+      items.map(it => `<div class="ex">
+        <h4>${it.name}(${it.code}) · ${it.direction === "up" ? "偏多" : it.direction === "down" ? "偏空" : "震荡"}
+          ${it.expected_return_pct > 0 ? "+" : ""}${it.expected_return_pct}% · 置信 ${(it.confidence * 100).toFixed(0)}%</h4>
+        <ul>${(it.drivers || []).map(d => `<li>${d}</li>`).join("")}</ul>
+        ${it.risk ? `<p class="hint" style="margin:6px 0 0">风险：${it.risk}</p>` : ""}
+      </div>`).join("");
+  } catch (e) {
+    $("examples").innerHTML = `<p class="hint">没有示例数据。</p>`;
+  }
+}
+
+/* ---------- 装配 ---------- */
+function activate(tab) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  ["home", "stock", "backtest", "signal", "agent"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== tab));
+  if (tab === "backtest" && !window.__bt) { window.__bt = 1; loadBacktest(); }
+  if (tab === "signal" && !window.__sig) { window.__sig = 1; loadSignal(); }
+  if (tab === "agent" && !window.__ex) { window.__ex = 1; loadExamples(); }
+}
+document.querySelectorAll("nav button").forEach(b => {
+  b.onclick = () => { history.replaceState(null, "", "#" + b.dataset.tab); activate(b.dataset.tab); };
+});
+$("load").onclick = loadStock;
+$("code").addEventListener("keydown", e => { if (e.key === "Enter") loadStock(); });
+$("ask").onclick = askAgent;
+$("question").addEventListener("keydown", e => { if (e.key === "Enter") askAgent(); });
+
+const samples = ["600519 现在什么位置？风险大吗？", "模型最看好哪几只", "跑赢沪深300 了吗", "000858 的近 20 日涨跌"];
+$("samples").innerHTML = samples.map(s => `<span class="chip">${s}</span>`).join("");
+document.querySelectorAll(".chip").forEach(c => { c.onclick = () => { $("question").value = c.textContent; askAgent(); }; });
+
+(async function boot() {
+  initKey();
+  await loadHome();
+  await loadStock();
+  const initial = (location.hash || "").replace("#", "");
+  if (["stock", "backtest", "signal", "agent"].includes(initial)) activate(initial);
+})();
+</script>
+</body>
+</html>

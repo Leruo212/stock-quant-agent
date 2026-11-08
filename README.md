@@ -1,5 +1,9 @@
 # QuantAgent
 
+[![ci](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml)
+[![live demo](https://img.shields.io/badge/demo-GitHub%20Pages-2f5fd0)](https://leruo212.github.io/stock-quant-agent/)
+[![license](https://img.shields.io/badge/license-MIT-16202c)](LICENSE)
+
 **把一份「基于深度学习的股票量化分析系统」的本科毕设，重建成一个结论可以被检验的系统。**
 
 原论文报告的样本外方向准确率是 78.3%、策略年化 12.5%、夏普 1.12。我用同一套特征、同一个窗口长度、同一种网络结构重新实现了一遍，
@@ -7,6 +11,10 @@
 
 这个仓库的价值不在于复刻出一个更好看的数字，而在于把「为什么那些数字是假的」一条条摆出来，
 并且留下了一条别人可以自己跑一遍的链路。
+
+> **在线试用** → <https://leruo212.github.io/stock-quant-agent/>
+> 静态页面，无需安装。图表和模型预测是预计算的；AI 对话用你自己的 API key 在浏览器里直接调模型，
+> key 只存在你的 localStorage，不经过任何服务器。
 
 ![策略回测](docs/img/backtest.png)
 
@@ -143,6 +151,23 @@ ledger --score     →  命中率 / MAE / 相关系数 / 分 provider 对比
 完整推导、成本估算、以及"为什么提示词优化的上限很低"见
 [docs/LLM_PREDICTION.md](docs/LLM_PREDICTION.md)。
 
+### 在线版是怎么做到的
+
+GitHub Pages 只能托管文件，不能跑进程。所以拆成两半：
+
+| 内容 | 在哪算 | 为什么 |
+|---|---|---|
+| K 线、模型预测、回测净值、信号报告 | 构建时预计算，写成 `docs/data/*.json` | 静态、可缓存、打开就快 |
+| 大模型对话 | 访客浏览器，直连 `api.deepseek.com` | 页面没有后端，也不该有你的 key |
+
+浏览器能直连是因为 DeepSeek 允许跨域（实测预检返回 `access-control-allow-origin`）。
+key 存 `localStorage`，只发给你填的那个接口；页面上有「清除」按钮，也写清了这种模式的
+固有风险——**同源脚本能读 localStorage**。介意的话就在本地跑 `serve`，key 只进环境变量。
+
+```bash
+make static     # 重新生成 docs/，会烘焙 4 条真实预测作为示例
+```
+
 ---
 
 ## 与论文的逐项对照
@@ -223,9 +248,10 @@ quantagent/
 2. **数据不随仓库分发。** `.gitignore` 掉 `data/cache/`、`reports/*.csv`、`.env`。
    行情接口的数据版权不属于本项目，只提供取数脚本。
 3. **密钥只走环境变量。** 仓库里只有 `.env.example`，没有任何真实 key。
+   在线版的 key 走访客自己的浏览器 localStorage，页面代码里不存在凭据。
 
 ```bash
-python scripts/privacy_check.py   # 提交前跑一遍
+python scripts/privacy_check.py   # 提交前跑一遍，CI 也会跑
 ```
 
 本仓库仅用于研究与教学演示，所有输出为模型计算结果与历史统计，不构成投资建议。
