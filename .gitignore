@@ -1,0 +1,26 @@
+# --- python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# --- data & model artefacts ---
+# Vendor quote data is not ours to redistribute. The pipeline regenerates it.
+data/cache/
+reports/*.csv
+*.parquet
+
+# --- secrets ---
+.env
+.env.*
+!.env.example
+# 私有敏感词表（脚本从这里读，仓库只提交 .example）
+.privacy-terms.txt
+
+# --- os / editor ---
+.DS_Store
+.idea/
+.vscode/
+*.swp

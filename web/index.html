@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QuantAgent · A 股量化研究工作台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2316202c'/%3E%3Ctext x='16' y='21' font-family='sans-serif' font-size='13' font-weight='700' fill='%23fff' text-anchor='middle'%3EQA%3C/text%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --ink:#16202c; --muted:#667085; --faint:#98a2b3;
+    --line:#e6e9ef; --line-soft:#f0f2f6;
+    --up:#c0392b; --down:#0e7c6b; --accent:#2f5fd0; --accent-soft:#eef3ff;
+    --radius:14px; --shadow:0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:400 14px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px 64px}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky;top:0;z-index:20;background:rgba(255,255,255,.88);
+    backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);
+  }
+  .head-in{max-width:1080px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .mark{
+    width:32px;height:32px;border-radius:9px;background:var(--ink);color:#fff;
+    display:grid;place-items:center;font-weight:700;font-size:13px;letter-spacing:.5px;flex:none;
+  }
+  .brand h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.2px}
+  .brand p{margin:0;font-size:11.5px;color:var(--faint);letter-spacing:.2px}
+  .pill{
+    font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);
+    color:var(--muted);background:#fff;white-space:nowrap;
+  }
+  .pill.ok{color:#0e7c6b;border-color:#cdeae3;background:#f2fbf8}
+  .pill.warn{color:#b42318;border-color:#f7d4cf;background:#fef5f3}
+  .grow{flex:1}
+
+  /* ---------- controls ---------- */
+  input[type=text], select{
+    border:1px solid var(--line);border-radius:9px;padding:7px 11px;font-size:13px;
+    background:#fff;color:var(--ink);outline:none;transition:border-color .15s, box-shadow .15s;
+    font-family:inherit;
+  }
+  input[type=text]:focus, select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  button{
+    border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:9px;
+    padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.primary:hover{background:#243244;color:#fff}
+  button.primary:disabled{opacity:.5;cursor:default}
+
+  /* ---------- tabs ---------- */
+  nav{max-width:1080px;margin:0 auto;padding:18px 24px 0;display:flex;gap:2px}
+  nav button{
+    border:none;background:none;border-radius:9px 9px 0 0;padding:9px 15px;
+    color:var(--muted);font-size:13.5px
+  }
+  nav button:hover{color:var(--ink)}
+  nav button.active{
+    color:var(--ink);font-weight:600;background:var(--card);
+    box-shadow:0 -1px 0 var(--line), 1px 0 0 var(--line), -1px 0 0 var(--line);
+  }
+
+  /* ---------- panels ---------- */
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:0 0 var(--radius) var(--radius);
+    border-top:none;padding:22px;box-shadow:var(--shadow)}
+  .panel.plain{border-radius:var(--radius);border-top:1px solid var(--line);margin-top:18px}
+  h2.sec{font-size:12px;font-weight:600;color:var(--faint);letter-spacing:.08em;
+    text-transform:uppercase;margin:26px 0 12px}
+  h2.sec:first-child{margin-top:0}
+
+  /* ---------- kpi ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
+  .kpi{border:1px solid var(--line-soft);border-radius:11px;padding:12px 14px;background:#fcfcfd}
+  .kpi .k{font-size:11.5px;color:var(--faint);letter-spacing:.02em}
+  .kpi .v{font-size:21px;font-weight:640;margin-top:3px;letter-spacing:-.2px}
+  .kpi .s{font-size:11px;color:var(--faint);margin-top:1px}
+  .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--ink)}
+
+  /* ---------- charts ---------- */
+  .chart-box{border:1px solid var(--line-soft);border-radius:12px;background:#fff;padding:6px 4px 2px;margin-top:4px}
+  svg.chart{display:block;width:100%;height:auto}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;padding:2px 12px 10px;font-size:11.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:3px;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line-soft)}
+  th{color:var(--faint);font-weight:500;font-size:11.5px;letter-spacing:.02em}
+  tr:last-child td{border-bottom:none}
+  td.r{text-align:right}
+  .feat{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}
+
+  /* ---------- callout ---------- */
+  .note{
+    border-left:3px solid var(--accent);background:var(--accent-soft);
+    border-radius:0 10px 10px 0;padding:12px 16px;font-size:13px;color:#2b3a55;margin-top:16px
+  }
+  .note b{font-weight:600}
+  .note.warn{border-left-color:#d97706;background:#fffbeb;color:#6b4a12}
+  .note small{display:block;color:var(--faint);margin-top:6px;font-size:11.5px}
+
+  /* ---------- agent ---------- */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 12px;
+    cursor:pointer;color:var(--muted);background:#fff;transition:.15s}
+  .chip:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .trace{
+    max-height:210px;overflow:auto;border:1px solid var(--line-soft);border-radius:11px;
+    padding:10px 12px;background:#fbfcfd;font:400 12px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;
+    color:var(--muted);white-space:pre-wrap;word-break:break-all
+  }
+  .trace .t-call{color:var(--accent)}
+  .trace .t-err{color:var(--up)}
+  .answer{
+    border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:12px;
+    white-space:pre-wrap;font-size:13.5px;line-height:1.85;background:#fff;min-height:64px
+  }
+  .answer.pending{color:var(--faint)}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .row .sp{flex:1}
+  .hint{font-size:12px;color:var(--faint)}
+  .hidden{display:none}
+  .fade{animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+  @media (max-width:680px){
+    .head-in{padding:12px 16px} .wrap{padding:0 16px 48px} nav{padding:12px 16px 0}
+    .panel{padding:16px} .feat{grid-template-columns:1fr}
+    .kpi .v{font-size:18px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="head-in">
+    <div class="mark">QA</div>
+    <div class="brand">
+      <h1>QuantAgent</h1>
+      <p>CNN-LSTM-Attention · 沪深300 · 日频</p>
+    </div>
+    <span class="pill" id="pill-model">模型状态 …</span>
+    <span class="pill" id="pill-llm">推理模式 …</span>
+    <div class="grow"></div>
+    <input type="text" id="code" value="600519" placeholder="股票代码" style="width:112px" />
+    <button class="primary" id="load">加载</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav>
+    <button data-tab="stock" class="active">个股</button>
+    <button data-tab="backtest">策略回测</button>
+    <button data-tab="signal">信号质量</button>
+    <button data-tab="agent">对话</button>
+  </nav>
+
+  <!-- ================= 个股 ================= -->
+  <section class="panel" id="tab-stock">
+    <h2 class="sec">行情</h2>
+    <div class="kpis" id="kpi-stock">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">加载中…</div></div>
+    </div>
+    <div class="chart-box"><svg class="chart" id="candle" viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend"><span><i style="background:#c0392b"></i>阳线</span><span><i style="background:#0e7c6b"></i>阴线</span></div>
+    </div>
+
+    <h2 class="sec">模型预测 · 未来 7 个交易日</h2>
+    <div class="kpis" id="kpi-pred">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">—</div></div>
+    </div>
+    <h2 class="sec">注意力权重 · 7 个时间步</h2>
+    <div class="chart-box"><svg class="chart" id="attn" viewBox="0 0 960 200" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <p class="hint" id="attn-hint" style="margin:8px 2px 0"></p>
+
+    <h2 class="sec">当前输入特征 · 9 维</h2>
+    <div class="feat"><table><tbody id="feat-a"></tbody></table><table><tbody id="feat-b"></tbody></table></div>
+  </section>
+
+  <!-- ================= 回测 ================= -->
+  <section class="panel hidden" id="tab-backtest">
+    <h2 class="sec">参数</h2>
+    <div class="row">
+      <input type="text" id="bt-start" value="2023-01-01" style="width:112px" />
+      <span class="hint">至</span>
+      <input type="text" id="bt-end" value="2024-12-31" style="width:112px" />
+      <span class="hint">调仓</span>
+      <input type="text" id="bt-rebal" value="7" style="width:56px" />
+      <span class="hint">日</span>
+      <select id="bt-signal">
+        <option value="momentum">动量（买涨）</option>
+        <option value="reversal">反转（买跌）</option>
+      </select>
+      <button class="primary" id="run-bt">运行回测</button>
+      <span class="hint" id="bt-hint"></span>
+    </div>
+
+    <h2 class="sec">绩效</h2>
+    <div class="kpis" id="kpi-bt">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">未运行</div></div>
+    </div>
+
+    <h2 class="sec">净值曲线</h2>
+    <div class="chart-box"><svg class="chart" id="equity" viewBox="0 0 960 340" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend" id="eq-legend"></div>
+    </div>
+
+    <div class="note warn" id="bt-note">
+      <b>基准怎么选，结论就怎么变。</b> 股票池是「今天的市值前 300」，用它回测历史本身就带有幸存者偏差——
+      这批名字在 2023–2024 的表现远好于当时的真实沪深300。所以只跟指数比会高估策略，
+      必须同时看<b>等权持有同一批股票</b>这条线，那才是「什么都不做」的收益。
+    </div>
+  </section>
+
+  <!-- ================= 信号质量 ================= -->
+  <section class="panel hidden" id="tab-signal">
+    <h2 class="sec">样本外信号检验</h2>
+    <div class="kpis" id="kpi-signal">
+      <div class="kpi"><div class="k">状态</div><div class="v" style="font-size:15px">加载中…</div></div>
+    </div>
+
+    <h2 class="sec">预测分层 · 各分位实现收益</h2>
+    <div class="chart-box"><svg class="chart" id="decile" viewBox="0 0 960 260" preserveAspectRatio="xMidYMid meet"></svg></div>
+
+    <div class="note" id="sig-note">
+      IC（信息系数）是横截面上「预测排序」与「实际收益排序」的秩相关。日频 IC 均值 0.03 上下就是可用的弱信号；
+      接近 0 且 IR 不显著，说明模型没有学到可交易的东西。
+    </div>
+  </section>
+
+  <!-- ================= 对话 ================= -->
+  <section class="panel hidden" id="tab-agent">
+    <h2 class="sec">可以问什么</h2>
+    <div class="chips" id="samples"></div>
+    <div class="row">
+      <input type="text" id="question" placeholder="例如：600519 未来一周的模型信号？" style="flex:1;min-width:220px" />
+      <button class="primary" id="ask">发送</button>
+    </div>
+    <h2 class="sec">工具调用轨迹</h2>
+    <div class="trace" id="trace">等待提问。</div>
+    <div class="answer pending" id="answer">对话结果会出现在这里。</div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const f2 = v => (v === null || v === undefined || Number.isNaN(v)) ? "—" : Number(v).toFixed(2);
+const pct = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? "—" : (v * 100).toFixed(d) + "%";
+const sign = v => v > 0 ? "up" : (v < 0 ? "down" : "flat");
+
+function kpi(k, v, cls = "", sub = "") {
+  return `<div class="kpi"><div class="k">${k}</div><div class="v ${cls}">${v}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
+}
+
+/* ---------- minimal SVG chart kit ---------- */
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(NS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+function grid(svg, W, H, pad, lo, hi, fmt) {
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (H - pad.t - pad.b) * i / 4;
+    svg.appendChild(svgEl("line", { x1: pad.l, y1: y, x2: W - pad.r, y2: y, stroke: "#eef0f4" }));
+    const label = svgEl("text", { x: pad.l - 10, y: y + 4, "font-size": 11, fill: "#98a2b3", "text-anchor": "end" });
+    label.textContent = fmt(hi - (hi - lo) * i / 4);
+    svg.appendChild(label);
+  }
+}
+function clear(svg) { while (svg.firstChild) svg.removeChild(svg.firstChild); }
+
+function drawCandles(svg, bars) {
+  clear(svg);
+  const W = 960, H = 340, pad = { l: 62, r: 18, t: 18, b: 30 };
+  let lo = Math.min(...bars.map(b => b.low)), hi = Math.max(...bars.map(b => b.high));
+  const span = (hi - lo) || 1; lo -= span * .05; hi += span * .05;
+  const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+  const step = plotW / bars.length, bw = Math.max(step * .62, 1);
+  const Y = v => pad.t + plotH * (1 - (v - lo) / (hi - lo));
+
+  grid(svg, W, H, pad, lo, hi, v => v.toFixed(1));
+  bars.forEach((b, i) => {
+    const x = pad.l + step * i + step / 2;
+    const color = b.close >= b.open ? "#c0392b" : "#0e7c6b";
+    svg.appendChild(svgEl("line", { x1: x, y1: Y(b.high), x2: x, y2: Y(b.low), stroke: color, "stroke-width": 1 }));
+    const top = Y(Math.max(b.open, b.close)), bot = Y(Math.min(b.open, b.close));
+    svg.appendChild(svgEl("rect", { x: x - bw / 2, y: top, width: bw, height: Math.max(bot - top, 1), fill: color, opacity: .88, rx: .5 }));
+  });
+  const t1 = svgEl("text", { x: pad.l, y: H - 8, "font-size": 11, fill: "#98a2b3" });
+  t1.textContent = bars[0].date; svg.appendChild(t1);
+  const t2 = svgEl("text", { x: W - pad.r, y: H - 8, "font-size": 11, fill: "#98a2b3", "text-anchor": "end" });
+  t2.textContent = bars[bars.length - 1].date; svg.appendChild(t2);
+}
+
+function drawLines(svg, series, opts = {}) {
+  clear(svg);
+  const W = 960, H = opts.height || 340, pad = { l: 62, r: 18, t: 18, b: 30 };
+  const all = series.flatMap(s => s.values).filter(v => typeof v === "number");
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if (opts.zero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  const span = (hi - lo) || 1; lo -= span * .06; hi += span * .06;
+  const n = Math.max(...series.map(s => s.values.length));
+  const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+  const X = i => pad.l + plotW * (n <= 1 ? 0 : i / (n - 1));
+  const Y = v => pad.t + plotH * (1 - (v - lo) / (hi - lo));
+
+  grid(svg, W, H, pad, lo, hi, v => Number(v).toFixed(2));
+  if (opts.zero) svg.appendChild(svgEl("line", {
+    x1: pad.l, y1: Y(0), x2: W - pad.r, y2: Y(0), stroke: "#cfd6e4", "stroke-dasharray": "4 4"
+  }));
+  series.forEach(s => {
+    const d = s.values.map((v, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+    svg.appendChild(svgEl("path", { d, fill: "none", stroke: s.color, "stroke-width": 1.9, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  });
+}
+
+function drawBars(svg, values, labels, opts = {}) {
+  clear(svg);
+  const W = 960, H = opts.height || 200, pad = { l: 62, r: 18, t: 18, b: 34 };
+  const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+  const max = Math.max(...values.map(Math.abs)) || 1;
+  const zero = pad.t + plotH * (opts.zero ? .5 : 0);
+  const step = plotW / values.length;
+  grid(svg, W, H, pad, 0, max, v => (opts.pct ? (v * 100).toFixed(1) + "%" : v.toFixed(3)));
+  if (opts.zero) svg.appendChild(svgEl("line", { x1: pad.l, y1: H - pad.b, x2: W - pad.r, y2: H - pad.b, stroke: "#cfd6e4" }));
+  values.forEach((v, i) => {
+    const h = Math.max((Math.abs(v) / max) * (plotH - 8), 1);
+    const x = pad.l + step * i + step * .18;
+    const y = v >= 0 ? (H - pad.b) - h : (H - pad.b);
+    svg.appendChild(svgEl("rect", {
+      x, y, width: step * .64, height: h, rx: 4,
+      fill: v >= 0 ? "#c0392b" : "#0e7c6b", opacity: .85
+    }));
+    const t = svgEl("text", { x: x + step * .32, y: H - 14, "font-size": 11, fill: "#98a2b3", "text-anchor": "middle" });
+    t.textContent = labels[i]; svg.appendChild(t);
+  });
+}
+
+/* ---------- 个股 ---------- */
+async function loadStock() {
+  const code = ($("code").value || "600519").trim();
+  $("kpi-stock").innerHTML = kpi("状态", "加载中…");
+  try {
+    const k = await (await fetch(`/api/kline?code=${code}&limit=120`)).json();
+    if (k.detail) throw new Error(k.detail);
+    const bars = k.bars, last = bars[bars.length - 1], prev = bars[bars.length - 2];
+    const chg = last.close / prev.close - 1;
+    const rets = bars.slice(1).map((b, i) => b.close / bars[i].close - 1);
+    const sd = Math.sqrt(rets.reduce((s, r) => s + (r - rets.reduce((a, b) => a + b, 0) / rets.length) ** 2, 0) / rets.length);
+    $("kpi-stock").innerHTML =
+      kpi("标的", `${k.code} ${k.name || ""}`, "flat", `${bars.length} 个交易日`) +
+      kpi("最新收盘", f2(last.close), sign(chg), last.date) +
+      kpi("日涨跌", pct(chg), sign(chg), "较前一交易日") +
+      kpi("年化波动", pct(sd * Math.sqrt(252), 1), "flat", "近 120 日");
+    drawCandles($("candle"), bars);
+  } catch (e) {
+    $("kpi-stock").innerHTML = kpi("错误", e.message);
+  }
+
+  try {
+    const p = await (await fetch(`/api/predict?code=${code}`)).json();
+    if (p.detail) throw new Error(p.detail);
+    const best = p.attention_weights.indexOf(Math.max(...p.attention_weights)) + 1;
+    $("kpi-pred").innerHTML =
+      kpi("预测相对收益", pct(p.predicted_return), sign(p.predicted_return), `${p.horizon_days} 个交易日`) +
+      kpi("方向", p.predicted_direction === "up" ? "偏多" : "偏空", sign(p.predicted_return), "模型输出符号") +
+      kpi("窗口截止", p.as_of, "flat", `收盘 ${f2(p.last_close)}`) +
+      kpi("注意力峰值", `T${best}`, "flat", "权重最大的时间步");
+    drawBars($("attn"), p.attention_weights, p.attention_weights.map((_, i) => `T${i + 1}`), { height: 200 });
+    const w = p.attention_weights, spread = Math.max(...w) - Math.min(...w);
+    $("attn-hint").textContent = spread < 0.01
+      ? "权重几乎均匀（≈1/7），说明模型没有找到更有信息量的时间步——与「信号质量」页 IC≈0 的结论一致。"
+      : `权重差异明显（极差 ${(spread * 100).toFixed(1)} 个百分点），模型对某些时间步更敏感。`;
+  } catch (e) {
+    $("kpi-pred").innerHTML = kpi("模型", String(e.message).includes("train") ? "未训练" : e.message);
+    clear($("attn"));
+  }
+
+  try {
+    const f = await (await fetch(`/api/features?code=${code}`)).json();
+    if (f.detail) throw new Error(f.detail);
+    const rows = Object.entries(f.features);
+    const half = Math.ceil(rows.length / 2);
+    const html = arr => arr.map(([k, v]) =>
+      `<tr><td>${k}</td><td class="r num ${sign(v)}">${Number(v).toFixed(4)}</td></tr>`).join("");
+    $("feat-a").innerHTML = html(rows.slice(0, half));
+    $("feat-b").innerHTML = html(rows.slice(half));
+  } catch (e) {
+    $("feat-a").innerHTML = `<tr><td class="hint">${e.message}</td></tr>`;
+    $("feat-b").innerHTML = "";
+  }
+}
+
+/* ---------- 回测 ---------- */
+async function runBacktest() {
+  const btn = $("run-bt"); btn.disabled = true; $("bt-hint").textContent = "运行中…";
+  try {
+    const url = `/api/backtest?start=${$("bt-start").value}&end=${$("bt-end").value}`
+      + `&rebalance_days=${$("bt-rebal").value}&signal=${$("bt-signal").value}`;
+    const r = await (await fetch(url)).json();
+    if (r.detail) throw new Error(r.detail);
+    const s = r.stats;
+    $("kpi-bt").innerHTML =
+      kpi("年化收益", pct(s.annual_return), sign(s.annual_return), `${s.n_days} 个交易日`) +
+      kpi("夏普", f2(s.sharpe), "flat", `波动 ${pct(s.annual_vol, 1)}`) +
+      kpi("最大回撤", pct(s.max_drawdown), "down", `Calmar ${f2(s.calmar)}`) +
+      kpi("等权持有", pct(s.equal_weight_annual_return), sign(s.equal_weight_annual_return), "同池买入不动") +
+      kpi("超额 vs 等权", pct(s.excess_vs_equal_weight), sign(s.excess_vs_equal_weight), "策略 − 等权") +
+      kpi("成本拖累", pct(s.cost_drag), "down", `年换手 ${f2(s.turnover_per_year)}×`);
+
+    const series = [{ name: "策略", color: "#c0392b", values: r.curve.map(c => c.strategy) }];
+    if (r.curve[0].benchmark !== undefined) series.push({ name: "沪深300", color: "#98a2b3", values: r.curve.map(c => c.benchmark) });
+    if (r.curve[0].equal_weight !== undefined) series.push({ name: "等权持有", color: "#2f5fd0", values: r.curve.map(c => c.equal_weight) });
+    drawLines($("equity"), series);
+    $("eq-legend").innerHTML = series.map(x => `<span><i style="background:${x.color}"></i>${x.name}</span>`).join("");
+    $("bt-hint").textContent = `${r.curve[0].date} → ${r.curve[r.curve.length - 1].date}`;
+    $("kpi-bt").dataset.done = "1";
+  } catch (e) {
+    $("bt-hint").textContent = "失败：" + e.message;
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- 信号质量 ---------- */
+async function loadSignal() {
+  try {
+    const r = await (await fetch("/api/signal")).json();
+    if (r.detail) throw new Error(r.detail);
+    const base = r.ridge_baseline || {};
+    $("kpi-signal").innerHTML =
+      kpi("日频 IC 均值", r.degenerate || r.mean_daily_ic == null ? "—" : Number(r.mean_daily_ic).toFixed(4),
+          r.mean_daily_ic > 0 ? "up" : "down", `IC std ${f2(r.ic_std)}`) +
+      kpi("方向准确率", pct(r.direction_accuracy, 1), "flat", `基准 ${pct(r.baseline_direction, 1)}`) +
+      kpi("IC 信息比", f2(r.ic_ir_annualised), "flat", "|IR|<1 视为不显著") +
+      kpi("分层价差", pct(r.decile_spread), sign(r.decile_spread), "最高 − 最低分位") +
+      kpi("线性基线 IC", base.mean_daily_ic === undefined ? "—" : Number(base.mean_daily_ic).toFixed(4), "flat", "Ridge，同特征") +
+      kpi("样本", `${(r.n_observations || 0).toLocaleString()}`, "flat", `${r.n_dates || 0} 个交易日`);
+
+    if (r.decile_mean_return) {
+      const keys = Object.keys(r.decile_mean_return).sort((a, b) => a - b);
+      drawBars($("decile"), keys.map(k => r.decile_mean_return[k]), keys.map(k => `D${k}`), { height: 260, pct: true });
+    }
+    if (r.degenerate) {
+      $("sig-note").innerHTML = `<b>模型塌缩：</b>${r.note || "预测值为常数，不存在排序。"}`;
+    }
+  } catch (e) {
+    $("kpi-signal").innerHTML = kpi("状态", e.message.includes("evaluate") ? "尚未生成信号报告" : e.message);
+  }
+}
+
+/* ---------- 对话 ---------- */
+function askAgent() {
+  const q = $("question").value.trim();
+  if (!q) return;
+  const trace = $("trace"); trace.innerHTML = "";
+  const ans = $("answer"); ans.classList.add("pending"); ans.textContent = "思考中…";
+  const log = (text, cls = "") => {
+    const d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text; trace.appendChild(d);
+    trace.scrollTop = trace.scrollHeight;
+  };
+  const es = new EventSource(`/api/agent?q=${encodeURIComponent(q)}`);
+  es.onmessage = msg => {
+    const evt = JSON.parse(msg.data);
+    if (evt.type === "tool_call") log(`→ ${evt.name}(${evt.arguments})`, "t-call");
+    else if (evt.type === "tool_result") log(`← ${evt.name} ${evt.result.ok ? "ok" : evt.result.error}`, evt.result.ok ? "" : "t-err");
+    else if (evt.type === "error") log(`! ${evt.message}`, "t-err");
+    else if (evt.type === "done") {
+      ans.classList.remove("pending");
+      ans.textContent = evt.answer || "（空回答）";
+      ans.classList.add("fade");
+      log(`mode = ${evt.mode}`); es.close();
+    }
+  };
+  es.onerror = () => { log("连接中断", "t-err"); es.close(); };
+}
+
+/* ---------- wiring ---------- */
+function activate(tab, run = true) {
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  ["stock", "backtest", "signal", "agent"].forEach(t => $("tab-" + t).classList.toggle("hidden", t !== tab));
+  if (!run) return;
+  if (tab === "backtest" && !$("kpi-bt").dataset.done) runBacktest();
+  if (tab === "signal" && !window.__signalLoaded) { window.__signalLoaded = true; loadSignal(); }
+}
+
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    history.replaceState(null, "", "#" + btn.dataset.tab);
+    activate(btn.dataset.tab);
+  };
+});
+$("load").onclick = loadStock;
+$("code").addEventListener("keydown", e => { if (e.key === "Enter") loadStock(); });
+$("run-bt").onclick = runBacktest;
+$("ask").onclick = askAgent;
+$("question").addEventListener("keydown", e => { if (e.key === "Enter") askAgent(); });
+
+const samples = [
+  "600519 未来一周的模型信号？",
+  "000858 的风险画像",
+  "今天模型最看好哪几只",
+  "跑一次 2023 到 2024 的回测",
+  "过去 7 天动量最强的股票",
+];
+$("samples").innerHTML = samples.map(s => `<span class="chip">${s}</span>`).join("");
+document.querySelectorAll(".chip").forEach(c => {
+  c.onclick = () => { $("question").value = c.textContent; askAgent(); };
+});
+
+fetch("/api/health").then(r => r.json()).then(h => {
+  const m = $("pill-model"), l = $("pill-llm");
+  m.textContent = h.model_ready ? "模型已加载" : "模型未训练";
+  m.className = "pill " + (h.model_ready ? "ok" : "warn");
+  l.textContent = h.llm_mode === "llm" ? "LLM 工具调用" : "本地规则规划";
+  l.className = "pill";
+}).catch(() => { $("pill-model").textContent = "服务未响应"; });
+
+loadStock();
+const initial = (location.hash || "").replace("#", "");
+if (["backtest", "signal", "agent"].includes(initial)) activate(initial);
+</script>
+</body>
+</html>

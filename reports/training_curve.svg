@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 320" width="720" height="320" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect width="720" height="320" fill="#ffffff"/>
+<text x="56" y="22" font-size="13" font-weight="600" fill="#1f2933">训练 / 验证 MSE</text>
+<line x1="56" y1="286.0" x2="704" y2="286.0" stroke="#e4e7eb"/>
+<text x="48" y="289.5" font-size="10" fill="#7b8794" text-anchor="end">0.00488</text>
+<line x1="56" y1="223.5" x2="704" y2="223.5" stroke="#e4e7eb"/>
+<text x="48" y="227.0" font-size="10" fill="#7b8794" text-anchor="end">0.00518</text>
+<line x1="56" y1="161.0" x2="704" y2="161.0" stroke="#e4e7eb"/>
+<text x="48" y="164.5" font-size="10" fill="#7b8794" text-anchor="end">0.00548</text>
+<line x1="56" y1="98.5" x2="704" y2="98.5" stroke="#e4e7eb"/>
+<text x="48" y="102.0" font-size="10" fill="#7b8794" text-anchor="end">0.00578</text>
+<line x1="56" y1="36.0" x2="704" y2="36.0" stroke="#e4e7eb"/>
+<text x="48" y="39.5" font-size="10" fill="#7b8794" text-anchor="end">0.00608</text>
+<text x="14" y="161" font-size="10" fill="#7b8794" transform="rotate(-90 14 161)" text-anchor="middle">MSE</text>
+<polyline points="56.0,53.2 105.8,267.9 155.7,267.8 205.5,267.0 255.4,266.7 305.2,267.8 355.1,267.4 404.9,267.6 454.8,268.1 504.6,267.6 554.5,268.3 604.3,268.1 654.2,268.8 704.0,268.1" fill="none" stroke="#1d4ed8" stroke-width="1.8" stroke-linejoin="round"/>
+<polyline points="56.0,114.9 105.8,116.6 155.7,116.4 205.5,114.7 255.4,108.2 305.2,116.1 355.1,116.5 404.9,115.0 454.8,115.9 504.6,116.6 554.5,116.5 604.3,114.1 654.2,110.8 704.0,114.3" fill="none" stroke="#b91c1c" stroke-width="1.8" stroke-linejoin="round"/>
+<rect x="56" y="300" width="10" height="3" fill="#1d4ed8"/>
+<text x="71" y="305" font-size="10" fill="#1f2933">训练误差</text>
+<rect x="206" y="300" width="10" height="3" fill="#b91c1c"/>
+<text x="221" y="305" font-size="10" fill="#1f2933">验证误差</text>
+</svg>
