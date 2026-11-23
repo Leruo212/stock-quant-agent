@@ -1,5 +1,7 @@
 # QuantAgent
 
+<p align="right"><a href="README.en.md"><img src="https://img.shields.io/badge/English-SWITCH-1F4E79?style=flat-square" alt="Read in English"></a></p>
+
 [![ci](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml)
 [![live demo](https://img.shields.io/badge/demo-GitHub%20Pages-2f5fd0)](https://leruo212.github.io/stock-quant-agent/)
 [![python](https://img.shields.io/badge/python-3.10%2B-16202c)](pyproject.toml)
