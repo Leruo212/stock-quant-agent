@@ -1,21 +1,19 @@
 # QuantAgent
 
-<p align="right"><a href="README.en.md"><img src="https://img.shields.io/badge/English-SWITCH-1F4E79?style=flat-square" alt="Read in English"></a></p>
+A 股日频量化研究项目，包含 CNN-LSTM-Attention 基线、策略回测，以及大语言模型（LLM / Large Language Model）预测与台账。
+
+[English](README.en.md)
 
 [![ci](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Leruo212/stock-quant-agent/actions/workflows/ci.yml)
 [![live demo](https://img.shields.io/badge/demo-GitHub%20Pages-2f5fd0)](https://leruo212.github.io/stock-quant-agent/)
 [![python](https://img.shields.io/badge/python-3.10%2B-16202c)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-16202c)](LICENSE)
 
-**沪深300 日频量化研究工作台：CNN-LSTM-Attention 基线模型 + 大模型预测 Agent，
-配套三基准回测、IC 与分层检验、以及一套记录每次真实预测的台账。**
-
-从行情抓取、特征工程、模型训练，到回测、信号检验、大模型推理与可视化，全链路可复现：
-一条命令重建数据，一条命令重跑实验，一条命令起前端。
+用于比较模型信号、量价策略和简单基准。仓库保留了模型接近随机水平的结果，配有信息系数（IC / Information Coefficient）、分层检验和回测报告。当前是研究项目，股票池存在幸存者偏差，大模型预测效果仍需前向样本验证。
 
 > **在线试用** → <https://leruo212.github.io/stock-quant-agent/>
 > 无需安装。图表与模型预测为构建时快照；AI 对话用你自己的 API key 在浏览器里直连模型，
-> key 只存在本机 localStorage，不经过任何服务器。
+> key 保存在本机 localStorage，请求直接发给所选模型服务商，不经过本项目的后端。
 
 ![回测](docs/img/backtest.png)
 
@@ -37,8 +35,12 @@
 
 ## 快速开始
 
+需要 Python 3.10 或更新版本。在仓库目录中创建并激活虚拟环境后安装：
+
 ```bash
-make install                        # 建 venv 装依赖（默认走清华镜像）
+python3 -m venv .venv
+source .venv/bin/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
 python -m quantagent.cli fetch      # 抓行情 → 本地缓存（约 40 秒 / 300 只）
 python -m quantagent.cli train      # 训练模型（CPU 约 1 分钟）
 python -m quantagent.cli backtest   # 动量策略回测 → reports/
@@ -55,8 +57,8 @@ python -m quantagent.cli forecast --codes 600519,000858,601318 --batch 8   # 批
 python -m quantagent.cli ledger --score
 ```
 
-> 首次 `fetch` 需要联网，之后完全离线可复现。模型 checkpoint 随仓库提供，
-> `serve` 开箱即用。行情数据不随仓库分发（版权不属于本项目）。
+> 首次 `fetch` 需要联网；已有缓存和模型权重时，可以离线运行相应的本地分析。
+> 模型 checkpoint 随仓库提供。重新抓行情和调用大模型仍需网络，行情数据不随仓库分发。
 
 ---
 
@@ -75,9 +77,9 @@ python -m quantagent.cli ledger --score
 | IC 信息比（年化） | -0.99 | -0.19 | \|IR\| < 1，不显著 |
 | 预测标准差 | 4.2e-06 | 1.1e-02 | 卷积网络收敛到常数 |
 
-**结论**：9 个价量特征在 7 日尺度上的信息含量很低。六组配置（学习率、batch、窗口 20、
-原始 OHLCV、排序标签）全部落在 49.51%–50.58%。同特征的线性基线同样接近 0，说明瓶颈在特征，
-不在模型容量——这也是把重心转向**大模型 Agent + 外部信息**的依据。
+**当前实验的结果**：六组配置（学习率、batch、窗口 20、原始 OHLCV、排序标签）的方向准确率
+均在 49.51%–50.58% 之间，同特征的线性基线 IC 也接近 0。这些实验没有显示出稳定的预测信号，
+但不足以单独证明瓶颈只在特征。大模型预测是另一条待验证的实验路线。
 
 ### 策略
 
@@ -101,8 +103,8 @@ python -m quantagent.cli ledger --score
 
 ## 大模型预测
 
-统计模型这条路走到 IC≈0 就到头了，所以重心放在**调用大模型 API 做方向判断**——
-但做法和"让模型说一只股票会涨会跌"不是一回事。
+除统计模型外，仓库还提供大模型方向预测实验。输入是按预测日期截取的量价快照，
+输出附字段引用、多次采样结果和预测记录，便于后续核对。
 
 **1. 喂数字，不喂故事。** 提示词里没有可供发挥的语义实体，只有 18 个数字：5/20/60 日动量、
 均线偏离、RSI、ATR、量比、60 日区间位置、相对沪深300 强弱。要求每条依据都引用字段名与数值，
@@ -168,7 +170,7 @@ quantagent/
 
 几个刻意的设计：
 
-- **缓存是复现边界。** `data/cache/` 一旦存在，全链路零网络请求。
+- **缓存用于复用行情。** 已缓存的数据可供本地实验复用；抓取新数据和调用大模型仍需网络。
 - **切分按日期，不按行。** 同一只股票相邻窗口高度相关，按行随机切分等于泄漏。
 - **z-score 只用训练段统计量**，并写进 checkpoint，推理时复用。
 - **基准要有三条线**（策略 / 指数 / 等权），只给一条的策略报告不值得信。
@@ -197,12 +199,12 @@ quantagent/
   方法缺陷，等权基准那条线就是它的量化——真实基准应该更接近 0.6% 而不是 28%。
 - **没有做多期滚动验证。** 只切了一刀（80/20）。正确做法是 walk-forward，每次重新拟合。
 - **不含涨跌停与停牌撮合限制**，实盘里 7 日调仓打到涨停板买不进。
-- **大模型台账样本为 0 条到期。** 仓库没配 API key，`ledger --score` 目前只会回 `n_scored: 0`。
-  这是设计如此：先有机制，等真实调用积累。
+- **大模型效果尚待前向验证。** 台账支持记录与到期评分，但示例预测不足以证明有效性；
+  实际可评分数量以本地 `ledger --score` 的输出为准。
 - **没有新闻/舆情模态。** 多模态是明确的下一个方向，但需要稳定数据源。
 
 ---
 
 ## License
 
-MIT © M1r4th0R
+[MIT](LICENSE) © M1r4th0R
